@@ -4,6 +4,31 @@
 
 Brief: [brief.md](brief.md). Scope is the brief's Scope In.
 
+## Picture
+
+```
+ebookdrop: a reader uploads an EPUB or PDF and reads it in a web library.
+
+reader --upload--> [check type, size, quota, dedup] --> Processing --convert--> Ready --open--> reader view
+                          └--reject--> error shown          └--damaged / timeout--> Failed: reason
+
+S1  Account and sign-in     one email, one private library
+S2  Upload a file           EPUB or PDF, 50 MB, 1 GB
+S3  Upload status           Processing, Ready or Failed
+S4  Library                 title, author, cover, status
+S5  Read in the browser     chapter 1 or page 1, no scripts
+S6  Delete                  book or account, files removed
+
+draft contexts (confirmed at step 5)
++-----------+      +-----------------------+      +------------+      +----------+
+| Identity  |----->| Library               |----->| Conversion |      | Reader   |
+| S1        |      | S2 S3 S4 S6           |<-----| S3         |      | S5       |
++-----------+      +-----------------------+      +------------+      +----------+
+open: Conversion is a context, or a port in Library (no invariant of its own?)
+open: Reader is a context, or a read model over Library
+open: who owns the upload status, Library or Conversion
+```
+
 ## Example map
 
 ### S1. As a reader I want to create an account and sign in so that my library is mine
