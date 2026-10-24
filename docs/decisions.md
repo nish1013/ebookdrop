@@ -1,0 +1,11 @@
+# Decisions
+
+| # | Kind | Decision | Why | Alternatives considered | Consequence |
+|---|---|---|---|---|---|
+| 1 | product | Build an own web reader with a library page. Decided 2026-10-24. | Vendor e-reader apps have no public API to add books. | Convert, then email the file to a vendor device address. Rejected: the vendor controls delivery, so the app cannot measure `book_ready`. | The app owns upload, storage and the reader. |
+| 2 | product | Metric (assumed): 95% of uploads are readable in the library within 2 minutes. Decided 2026-10-24. | No real data exists yet. The events `upload_received` and `book_ready` make it countable. | Count uploads only. Rejected: a count shows nothing about readable books. | The app records both events with timestamps. |
+| 3 | product | User (assumed): a reader with DRM-free EPUB and PDF files. Decided 2026-10-24. | The input names one e-reader brand only. DRM files cannot convert legally. | All e-reader owners, DRM files included. Rejected: DRM removal has legal risk. | DRM files are rejected with a reason. |
+| 4 | product | Accept EPUB and PDF only. Normalise EPUB. Keep PDF as it is. Decided 2026-10-24. | Each extra format adds a converter and its failure cases. | Also DOCX, MOBI, AZW. Rejected for release 1: three more converters. | Other types are rejected with a reason. |
+| 5 | product | Risk tier is high bar. Decided 2026-10-24. | The app parses untrusted files and holds private libraries. | Reversible. Rejected: a malformed file can attack the converter. | 50 MB limit, type check by content, sandboxed conversion with a timeout, owner-only libraries. |
+| 6 | product | Release 1 scope: upload, library list, browser reading, upload status, one account per reader. Decided 2026-10-24. | This is the smallest set that can move the metric. | Collections, search, position sync, retry queue, shared libraries. Rejected: none of them moves the metric. | The cut items wait for release 2. |
+| 7 | product | The app is vendor-neutral, with no e-reader brand in its name, code or docs. Decided 2026-10-24. | The repo can go public later. A brand name invites a trademark claim. | A brand-named app. Rejected: it limits sharing and implies a vendor link. | The brief quotes the neutral goal that the owner chose. |
