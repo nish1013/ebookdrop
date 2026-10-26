@@ -61,7 +61,7 @@ Rules
 | AC7 | Ana is signed out | A request uploads `dune.epub` | The app answers 401. No event. |
 | AC8 | Ana owns `dune.epub`, sha256 `9f2c…` | Ben uploads the same bytes | `UploadReceived`: Ben gets his own book |
 | AC9 | Ana's files total 990 MB | Ana uploads `atlas.pdf`, 20 MB | `UploadRejected(over_quota)`: "Your library is full (1 GB)" |
-| AC10 | Ana's files total 960 MB | Ana uploads two files of 30 MB in the same second | One `UploadReceived`. One `UploadRejected(over_quota)`. |
+| AC10 | Ana's files total 980 MB | Ana uploads two files of 30 MB in the same second | One `UploadReceived`. One `UploadRejected(over_quota)`. |
 
 Questions: Q1, Q3, Q5, Q6, Q10, Q11.
 
@@ -69,6 +69,9 @@ Questions: Q1, Q3, Q5, Q6, Q10, Q11.
 
 Policy P3: whenever `EpubNormalised` or `PdfKeptAsIs`, mark the book ready. ⚠ The command crosses
 two draft contexts.
+
+Rules
+- R13 A book leaves Processing once, to Ready or Failed. A deleted book never comes back.
 
 | AC | Given | When | Then |
 |---|---|---|---|
