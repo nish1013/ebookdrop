@@ -120,3 +120,27 @@ Draft. Step ⑤ confirms them from the deciders.
 | Library | Own words: upload, book, owner. It owns the reader's files and their status. | Who owns the status during conversion? |
 | Conversion | Own words: sandbox, normalise, timeout. Pivotal events 7 and 16 frame it. | A context, or a tool behind a port? |
 | Reading, Metrics | No state change of their own. | Read models, not contexts? |
+
+## Process
+
+Step ②. Each event gets its cause. A cause with no person is a policy.
+
+| # | Event | Command | Actor | Policy | Read model |
+|---|---|---|---|---|---|
+| 1 | `ReaderSignedUp` | `SignUp` | Visitor | | Sign-up form |
+| 2 | `ReaderSignedIn` | `SignIn` | Reader | | Sign-in form |
+| 3 | `ReaderSignedOut` | `SignOut` | Reader, or time | | |
+| 4 | `UploadAbandoned` | `UploadBook` | Reader | | |
+| 5 | `UploadRejected(reason)` | `UploadBook` | Reader | | Upload form with the reason |
+| 6 | `DuplicateUploadDetected` | `UploadBook` | Reader | | Library list |
+| 7 | `UploadReceived` | `UploadBook` | Reader | | Library list: "Processing" |
+| 8-14 | `ConversionQueued` to `SandboxEscapeBlocked` | `ConvertBook` | | P1 whenever `UploadReceived`, convert the file | |
+| 13 | `ConversionFailed(stuck)` | `FailStuckConversion` | | P2 whenever `ProcessingDeadlinePassed`, fail the conversion | Library list: "Failed" with reason |
+| 15 | `ProcessingDeadlinePassed` | none: time | Clock | | |
+| 16 | `BookReady` | `MarkBookReady` | | P3 whenever `EpubNormalised` or `PdfKeptAsIs`, mark the book ready | Library list: title, author, cover |
+| 17 | `BookReadyLate` | none: derived from 7 and 16 | | | Metric report |
+| 18-20 | `BookOpened`, `BookOpenFailed`, `BookAccessDenied` | `OpenBook` | Reader | | Reader view |
+| 21-22 | `BookDeleted`, `BookDeletedDuringConversion` | `DeleteBook` | Reader | | Library list |
+| 23 | `BookFilesRemoved` | `RemoveBookFiles` | | P4 whenever `BookDeleted` or `AccountDeleted`, remove the files | |
+| 24 | `FailedUploadCleanedUp` | `CleanFailedUpload` | | P5 whenever `ConversionFailed` is older than the keep time, remove its files | |
+| 25 | `AccountDeleted` | `DeleteAccount` | Reader | | Account page |
