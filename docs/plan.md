@@ -2,7 +2,7 @@
 
 Status: locked, 2026-10-27
 
-Scope: release 1 of the brief, plus delete (decision 9). Model: [deciders.md](deciders.md).
+Scope: release 1 of the brief, plus delete (decision 9). Model: [aggregates.md](aggregates.md).
 Criteria: [commands.md](commands.md).
 
 ## Stack
@@ -55,7 +55,7 @@ Each criterion is in exactly one PR. A PR that adds a screen adds its Playwright
 
 | Level | What | Rule |
 |---|---|---|
-| Unit | Value objects, decider rules | No database. |
+| Unit | Value objects, aggregate rules | No database. |
 | Integration | Each guard against Postgres | Each race test fails when its guard is removed. |
 | Contract | `ConverterPort` | One suite runs against the stub and the real adapter. |
 | Browser | One spec per screen | Runs in CI with `make test`. |

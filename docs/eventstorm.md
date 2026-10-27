@@ -1,7 +1,7 @@
 # Event storm
 
 Brief: [brief.md](brief.md). Four views stormed events from the brief: user (U), business (B),
-failure (F), outside (O). Step ①: timeline, pivotal events, hotspots, draft contexts.
+failure (F), outside (O). Step ①: timeline, pivotal events, hot spots, draft contexts.
 
 ## Timeline
 
@@ -52,9 +52,9 @@ failure (F), outside (O). Step ①: timeline, pivotal events, hotspots, draft co
 | `UploadAccepted`, `FileStored`, `UploadRetriedByReader` | The same fact as `UploadReceived`. A re-upload is a new upload. |
 | `ConversionTimedOut`, `ConversionCrashed`, `ConvertedFileStoreFailed`, `UploadFailed`, `BookMarkedFailed` | One fact with a reason: `ConversionFailed(reason)`. |
 | `WorkerLostMidConversion`, `UploadStuckInProcessing` | The outside fact is time: `ProcessingDeadlinePassed`. |
-| `MetadataExtracted`, `CoverExtracted`, `MetadataMissing` | One fact: `BookDetailsExtracted`. A missing value is hotspot H4. |
-| `MetricTargetMissed` | A read model over events 7 and 16. |
-| `EmptyLibraryViewed`, `LibraryViewed`, `BookProcessingShown`, `BookFailedShown`, `PageTurned`, `BookClosed` | Views change no state. They are read models at step ②. |
+| `MetadataExtracted`, `CoverExtracted`, `MetadataMissing` | One fact: `BookDetailsExtracted`. A missing value is hot spot H4. |
+| `MetricTargetMissed` | A view over events 7 and 16. |
+| `EmptyLibraryViewed`, `LibraryViewed`, `BookProcessingShown`, `BookFailedShown`, `PageTurned`, `BookClosed` | Views change no state. They are views at step ②. |
 | `FileTypeDetected`, `SandboxStarted` | Steps inside a command, not business facts. |
 | `CopyrightComplaintReceived` | Out of scope. Libraries are private, and the brief has no takedown. |
 
@@ -78,7 +78,7 @@ A pivotal event changes the business phase.
 | failed | Rejected at intake: the reader must pick another file | Failed in conversion: the file was accepted, then broke |
 | ready | `book_ready`: the conversion ended | The book opens in the browser (event 19) |
 
-## Hotspots
+## Hot spots
 
 | ⚡ | At | Doubt | Kind |
 |---|---|---|---|
@@ -102,14 +102,14 @@ A pivotal event changes the business phase.
 
 ## Draft contexts
 
-Draft. Step ⑤ confirms them from the deciders.
+Draft. Step ⑤ confirms them from the aggregates.
 
 ```
 +-----------+      +----------------------------+      +--------------+
 | Identity  |----->| Library                    |----->| Conversion   |
 | 1 2 3 25  |      | 5 6 7 16 20 21 22 23 24 25 |<-----| 8-15         |
 +-----------+      +----------------------------+      +--------------+
-                          │ read models
+                          │ views
                           ▼
                    Reading 18 19    Metrics 17
 ```
@@ -119,13 +119,13 @@ Draft. Step ⑤ confirms them from the deciders.
 | Identity | Own words: account, password, session. Own rule: one email, one account. | |
 | Library | Own words: upload, book, owner. It owns the reader's files and their status. | Who owns the status during conversion? |
 | Conversion | Own words: sandbox, normalise, timeout. Pivotal events 7 and 16 frame it. | A context, or a tool behind a port? |
-| Reading, Metrics | No state change of their own. | Read models, not contexts? |
+| Reading, Metrics | No state change of their own. | Views, not contexts? |
 
 ## Process
 
 Step ②. Each event gets its cause. A cause with no person is a policy.
 
-| # | Event | Command | Actor | Policy | Read model |
+| # | Event | Command | Role | Policy | View |
 |---|---|---|---|---|---|
 | 1 | `ReaderSignedUp` | `SignUp` | Visitor | | Sign-up form |
 | 2 | `ReaderSignedIn` | `SignIn` | Reader | | Sign-in form |

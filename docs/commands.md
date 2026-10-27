@@ -209,7 +209,7 @@ Questions: Q4, Q8, Q10, Q11, Q12.
 | Q11 | S4, S5 | A crash after `UploadReceived` and before the queue. | tech | decided | Outbox row in the same transaction. Card C3. |
 | Q12 | S5, S7 | The timeout value and the stuck deadline. | tech | decided | 60 s and 5 min. Decision 21. |
 | Q13 | S1-S3 | Sign-in method and session length. | tech | decided | Email and password, 14 days. Decision 22. |
-| Q14 | S6, S7 | Who owns the book status during conversion? | boundary | decided | Library. Decider card D2. |
+| Q14 | S6, S7 | Who owns the book status during conversion? | boundary | decided | Library. Aggregate card D2. |
 | Q15 | S6, S9 | A delete during conversion, then the result arrives. | boundary | decided | Staging folder, removed on 0 rows. Decision 23. |
 | Q16 | S10 | Row gone, file stays: the order of a delete. | tech | decided | Rows first, then P4 retries until done. Card C3. |
 | Q17 | S4, S5 | A corrupt file: reject at intake, or fail in conversion? | boundary | decided | A sandboxed inspect at intake. Decision 19. |
