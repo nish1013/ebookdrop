@@ -13,7 +13,7 @@ failure (F), outside (O). Step ①: timeline, pivotal events, hotspots, draft co
                                                                  ⚡H13 sign-in method, session length
  INTAKE
   4  UploadAbandoned           F          the transfer stopped before the last byte
-  5  UploadRejected(reason)    U B F O    too_large · not_epub_or_pdf · drm_protected · password_protected · over_quota
+  5  UploadRejected(reason)    U B F O    too_large · not_epub_or_pdf · drm_protected · password_protected · damaged · over_quota
                                                                  ⚡H6 size check before or after transfer
                                                                  ⚡H7 DRM in PDF, password PDF
                                                                  ⚡H8 a corrupt file: reject here or fail later
@@ -27,7 +27,7 @@ failure (F), outside (O). Step ①: timeline, pivotal events, hotspots, draft co
  10  EpubNormalised            all
  11  PdfKeptAsIs               all
  12  BookDetailsExtracted      U B O      title, author, cover   ⚡H4 no title or cover: fail or fallback
- 13  ConversionFailed(reason)  all        malformed · unreadable · timed_out · crashed · not_stored
+ 13  ConversionFailed(reason)  all        malformed · unreadable · timed_out · crashed · not_stored · stuck
                                                                  ⚡H10 timeout value inside 2 minutes
  14  SandboxEscapeBlocked      O          a file tried network or disk access
  15  ProcessingDeadlinePassed  F O        time: no ready or failed after the deadline
