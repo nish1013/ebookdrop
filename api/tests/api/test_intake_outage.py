@@ -5,8 +5,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
 from ebookdrop.conversion.port import BookFormat
-from ebookdrop.inspection.port import InspectorUnavailableError
+from ebookdrop.inspection.docker import DockerInspector
+from ebookdrop.inspection.port import InspectorPort, InspectorUnavailableError
 from tests.api.conftest import count, intake_events, refuse
+from tests.fakes import FakeDocker
 from tests.samples import epub
 
 
@@ -15,9 +17,11 @@ class DownInspector:
         raise InspectorUnavailableError("docker exit 1")
 
 
-@pytest.fixture
-def inspector() -> DownInspector:
-    return DownInspector()
+@pytest.fixture(params=["docker_exit", "slow_container_start"])
+def inspector(request: pytest.FixtureRequest) -> InspectorPort:
+    if request.param == "docker_exit":
+        return DownInspector()
+    return DockerInspector(run=FakeDocker(slow_start=True))
 
 
 def test_upload_while_the_sandbox_is_down_answers_503_and_rejects_nothing(
