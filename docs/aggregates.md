@@ -1,11 +1,11 @@
-# Deciders
+# Aggregates
 
-Commands: [commands.md](commands.md). A decider (aggregate) takes a command, checks its rule, and
+Commands: [commands.md](commands.md). An aggregate takes a command, checks its rule, and
 emits the event. Step ④: the rule of each command, the data it reads, the guard.
 
 ## Rule per command
 
-| Command | Rule | When | Reads (footprint) | Decider |
+| Command | Rule | When | Data the rule reads | Aggregate |
 |---|---|---|---|---|
 | `SignUp` | R1 One email has one account. | before the event: immediate | All accounts, by `lower(trim(email))` | None: a set rule, a unique key |
 | `SignIn`, `SignOut` | None on stored data. | | | None: plain data |
@@ -20,7 +20,7 @@ emits the event. Step ④: the rule of each command, the data it reads, the guar
 | `DeleteAccount` | A deleted account cannot sign in. | immediate | One account row | `Account(reader)` |
 | `DeleteAccount` | The library of a deleted account goes. | after the event: eventual | Ana's books | Policy P6 |
 
-## Deciders
+## Aggregates
 
 ### Library(reader)
 
@@ -39,10 +39,10 @@ Guard     unique (reader_id, sha256)
             0 rows: no event (deleted, already ready, or already failed)
 ```
 
-| Why one decider | |
+| Why one aggregate | |
 |---|---|
-| R6 and R10 read the same scope: one reader's books. | Footprints overlap, so they merge. |
-| `DeleteBook` changes the book and the bytes used. | Two deciders would break "one command, one decider". |
+| R6 and R10 read the same scope: one reader's books. | Both rules read the same rows, so they merge. |
+| `DeleteBook` changes the book and the bytes used. | Two aggregates would break "one command, one aggregate". |
 | A reader rarely uploads two files at once. | One lock per reader blocks nobody else. |
 
 ### Account(reader)
@@ -89,32 +89,32 @@ Step ⑤ picks a strategy for each policy.
 
 ## Contexts
 
-Step ⑤. The deciders confirm two contexts. Conversion is a tool behind a port.
+Step ⑤. The aggregates give two contexts. Conversion is a tool behind a port.
 
 ```
-+---------------------+   who is signed in (ask)   +-------------------------------+
-| Identity            |<---------------------------| Library                       |
-| Account(reader)     |                            | Library(reader)               |
-| SignUp SignIn       |--- P6 AccountDeleted ----->| UploadBook MarkBookReady      |
-| SignOut DeleteAccount|                           | FailStuckConversion DeleteBook|
-+---------------------+                            | read models: list, reader view,|
-                                                   | metric report                  |
-                                                   +-------------------------------+
-                                                     │ P1 ConvertBook    ▲ P3 MarkBookReady
-                                                     ▼                   │
-                                                   [ ConverterPort ] -> sandbox tool
-                                                     │ P4 P5
-                                                     ▼
-                                                   [ StoragePort ] -> file store
++-----------------------+   who is signed in (ask)   +---------------------------------+
+| Identity              |<---------------------------| Library                         |
+| Account(reader)       |                            | Library(reader)                 |
+| SignUp SignIn         |--- P6 AccountDeleted ----->| UploadBook MarkBookReady        |
+| SignOut DeleteAccount |                            | FailStuckConversion DeleteBook  |
++-----------------------+                            | views: list, reader view,       |
+                                                     | metric report                   |
+                                                     +---------------------------------+
+                                                       │ P1 ConvertBook    ▲ P3 MarkBookReady
+                                                       ▼                   │
+                                                     [ ConverterPort ] -> sandbox tool
+                                                       │ P4 P5
+                                                       ▼
+                                                     [ StoragePort ] -> file store
 ```
 
-| Draft | Confirmed | Why |
+| Part | Result | Why |
 |---|---|---|
 | Identity | Identity | `Account(reader)` owns R1 and sign-in. |
 | Library | Library | `Library(reader)` owns R6, R10, R13. It owns the book status (Q14). |
-| Conversion context | A tool behind `ConverterPort` | No decider. Its one rule is an idempotency key. |
-| Reading context | A read model in Library | `OpenBook` reads. It decides nothing. |
-| Metrics | A read model in Library | `BookReadyLate` is derived from events 7 and 16. |
+| Conversion | A tool behind `ConverterPort` | No aggregate. Its one rule is an idempotency key. |
+| Reading | A view in Library | `OpenBook` reads. It decides nothing. |
+| Metrics | A view in Library | `BookReadyLate` is derived from events 7 and 16. |
 
 ## Policy strategies
 
@@ -132,9 +132,9 @@ Step ⑤. The deciders confirm two contexts. Conversion is a tool behind a port.
 | Check | Result | Note |
 |---|---|---|
 | Every event has a command or a policy | Pass, 2 exceptions | `ProcessingDeadlinePassed` is time. `BookReadyLate` is derived on read. |
-| Every command has an actor or a policy | Pass | S5, S6, S7, S10, S11 run from P1 to P5. P6 has no command name. It removes rows only. |
+| Every command has an role or a policy | Pass | S5, S6, S7, S10, S11 run from P1 to P5. P6 has no command name. It removes rows only. |
 | Every word comes from the timeline | Pass | Reject and failure reasons are on the timeline, events 5 and 13. |
-| One command changes one decider | Pass | `DeleteAccount` changes `Account(reader)` only (decision 18). |
+| One command changes one aggregate | Pass | `DeleteAccount` changes `Account(reader)` only (decision 18). |
 | Each fact lives in one place | Pass, 1 copy | `libraries.bytes_used` copies the sum of `books.size`. Reason: the quota guard needs one row to update. |
 | Each policy names its strategy | Pass | Policy strategies table. |
 | Each arrow between contexts is ask | Pass | Library asks Identity for the signed-in reader. P6 carries an event, by outbox. |

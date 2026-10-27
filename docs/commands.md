@@ -3,7 +3,7 @@
 Timeline: [eventstorm.md](eventstorm.md). One section per command. `When` is the command, `Then` is
 its events.
 
-## Identity (draft)
+## Identity
 
 ### S1. SignUp: As a visitor I want an account so that my library is private
 
@@ -36,7 +36,7 @@ Questions: Q13.
 
 Questions: Q13.
 
-## Library (draft)
+## Library
 
 ### S4. UploadBook: As a reader I want to upload an EPUB or PDF so that it becomes a book
 
@@ -70,8 +70,7 @@ Questions: Q1, Q3, Q5, Q6, Q10, Q11.
 
 ### S6. MarkBookReady: As a reader I want a converted book in my library so that I can read it
 
-Policy P3: whenever `EpubNormalised` or `PdfKeptAsIs`, mark the book ready. ⚠ The command crosses
-two draft contexts.
+Policy P3: whenever `EpubNormalised` or `PdfKeptAsIs`, mark the book ready.
 
 Rules
 - R13 A book leaves Processing once, to Ready or Failed. A deleted book never comes back.
@@ -88,8 +87,7 @@ Questions: Q4, Q7, Q15.
 
 ### S7. FailStuckConversion: As a reader I want a stuck upload to fail so that I can try again
 
-Policy P2: whenever `ProcessingDeadlinePassed`, fail the conversion. ⚠ The command crosses two
-draft contexts.
+Policy P2: whenever `ProcessingDeadlinePassed`, fail the conversion.
 
 | AC | Given | When | Then |
 |---|---|---|---|
@@ -147,7 +145,7 @@ Questions: Q2.
 
 ### S12. DeleteAccount: As a reader I want to delete my account so that no data of mine stays
 
-⚠ The command crosses two draft contexts.
+Policy P6 removes the library after the account (decision 18).
 
 | AC | Given | When | Then |
 |---|---|---|---|
@@ -156,7 +154,7 @@ Questions: Q2.
 
 Questions: Q2.
 
-## Conversion (draft)
+## Conversion
 
 ### S5. ConvertBook: As a reader I want my file made readable so that it opens in the browser
 
@@ -209,7 +207,7 @@ Questions: Q4, Q8, Q10, Q11, Q12.
 | Q11 | S4, S5 | A crash after `UploadReceived` and before the queue. | tech | decided | Outbox row in the same transaction. Card C3. |
 | Q12 | S5, S7 | The timeout value and the stuck deadline. | tech | decided | 60 s and 5 min. Decision 21. |
 | Q13 | S1-S3 | Sign-in method and session length. | tech | decided | Email and password, 14 days. Decision 22. |
-| Q14 | S6, S7 | Who owns the book status during conversion? | boundary | decided | Library. Decider card D2. |
+| Q14 | S6, S7 | Who owns the book status during conversion? | boundary | decided | Library. Aggregate card D2. |
 | Q15 | S6, S9 | A delete during conversion, then the result arrives. | boundary | decided | Staging folder, removed on 0 rows. Decision 23. |
 | Q16 | S10 | Row gone, file stays: the order of a delete. | tech | decided | Rows first, then P4 retries until done. Card C3. |
 | Q17 | S4, S5 | A corrupt file: reject at intake, or fail in conversion? | boundary | decided | A sandboxed inspect at intake. Decision 19. |

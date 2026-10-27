@@ -1,13 +1,13 @@
 # Event storm
 
 Brief: [brief.md](brief.md). Four views stormed events from the brief: user (U), business (B),
-failure (F), outside (O). Step ①: timeline, pivotal events, hotspots, draft contexts.
+failure (F), outside (O). Step ①: timeline and hot spots.
 
 ## Timeline
 
 ```
  ACCOUNT
-  1  ReaderSignedUp            U B        ║ pivotal: a private library exists
+  1  ReaderSignedUp            U B        a private library exists
   2  ReaderSignedIn            U
   3  ReaderSignedOut           U O        also when the session expires
                                                                  ⚡H13 sign-in method, session length
@@ -19,7 +19,7 @@ failure (F), outside (O). Step ①: timeline, pivotal events, hotspots, draft co
                                                                  ⚡H8 a corrupt file: reject here or fail later
                                                                  ⚡H3 storage quota per reader
   6  DuplicateUploadDetected   U B F                             ⚡H1 reject, keep both or replace
-  7  UploadReceived            all        ║ pivotal: metric start, upload_received
+  7  UploadReceived            all        metric start, upload_received
                                                                  ⚡H5 clock start, denominator
  CONVERSION
   8  ConversionQueued          F O                               ⚡H9 crash between 7 and 9
@@ -32,18 +32,18 @@ failure (F), outside (O). Step ①: timeline, pivotal events, hotspots, draft co
  14  SandboxEscapeBlocked      O          a file tried network or disk access
  15  ProcessingDeadlinePassed  F O        time: no ready or failed after the deadline
                                                                  ⚡H11 who finds it, and when
- 16  BookReady                 all        ║ pivotal: metric end, book_ready
+ 16  BookReady                 all        metric end, book_ready
  17  BookReadyLate             B F O      ready after 2 minutes  ⚡H12 alert or report only
  READING
  18  BookOpened                U B O
  19  BookOpenFailed            F          a ready book does not open  ⚡H14 back to failed?
  20  BookAccessDenied          all        another reader's book  ⚡H15 404 or 403
  REMOVAL
- 21  BookDeleted               U B F      ║ pivotal: personal data leaves  ⚡H2 in release 1?
+ 21  BookDeleted               U B F      personal data leaves  ⚡H2 in release 1?
  22  BookDeletedDuringConversion  F       ⚡H16 the result comes back as a ghost book
  23  BookFilesRemoved          F          ⚡H17 row gone, file stays
  24  FailedUploadCleanedUp     O          time: files of failed uploads
- 25  AccountDeleted            U B F      ║ pivotal: the library ends  ⚡H2
+ 25  AccountDeleted            U B F      the library ends  ⚡H2
 ```
 
 | Merged or dropped | Why |
@@ -52,22 +52,11 @@ failure (F), outside (O). Step ①: timeline, pivotal events, hotspots, draft co
 | `UploadAccepted`, `FileStored`, `UploadRetriedByReader` | The same fact as `UploadReceived`. A re-upload is a new upload. |
 | `ConversionTimedOut`, `ConversionCrashed`, `ConvertedFileStoreFailed`, `UploadFailed`, `BookMarkedFailed` | One fact with a reason: `ConversionFailed(reason)`. |
 | `WorkerLostMidConversion`, `UploadStuckInProcessing` | The outside fact is time: `ProcessingDeadlinePassed`. |
-| `MetadataExtracted`, `CoverExtracted`, `MetadataMissing` | One fact: `BookDetailsExtracted`. A missing value is hotspot H4. |
-| `MetricTargetMissed` | A read model over events 7 and 16. |
-| `EmptyLibraryViewed`, `LibraryViewed`, `BookProcessingShown`, `BookFailedShown`, `PageTurned`, `BookClosed` | Views change no state. They are read models at step ②. |
+| `MetadataExtracted`, `CoverExtracted`, `MetadataMissing` | One fact: `BookDetailsExtracted`. A missing value is hot spot H4. |
+| `MetricTargetMissed` | A view over events 7 and 16. |
+| `EmptyLibraryViewed`, `LibraryViewed`, `BookProcessingShown`, `BookFailedShown`, `PageTurned`, `BookClosed` | Views change no state. They are views at step ②. |
 | `FileTypeDetected`, `SandboxStarted` | Steps inside a command, not business facts. |
 | `CopyrightComplaintReceived` | Out of scope. Libraries are private, and the brief has no takedown. |
-
-## Pivotal events
-
-A pivotal event changes the business phase.
-
-| Event | Phase before | Phase after |
-|---|---|---|
-| `ReaderSignedUp` | No account | A private, empty library |
-| `UploadReceived` | A file in transfer | A file the app owns, and the metric clock runs |
-| `BookReady` | A file in processing | A readable book in the library |
-| `BookDeleted`, `AccountDeleted` | Personal data held | Personal data removed |
 
 ## Words with two meanings
 
@@ -78,7 +67,7 @@ A pivotal event changes the business phase.
 | failed | Rejected at intake: the reader must pick another file | Failed in conversion: the file was accepted, then broke |
 | ready | `book_ready`: the conversion ended | The book opens in the browser (event 19) |
 
-## Hotspots
+## Hot spots
 
 | ⚡ | At | Doubt | Kind |
 |---|---|---|---|
@@ -100,32 +89,11 @@ A pivotal event changes the business phase.
 | H16 | 22 | A delete during conversion, then the conversion result arrives. | boundary |
 | H17 | 23 | A delete that removes the row but keeps the file leaves personal data. | tech |
 
-## Draft contexts
-
-Draft. Step ⑤ confirms them from the deciders.
-
-```
-+-----------+      +----------------------------+      +--------------+
-| Identity  |----->| Library                    |----->| Conversion   |
-| 1 2 3 25  |      | 5 6 7 16 20 21 22 23 24 25 |<-----| 8-15         |
-+-----------+      +----------------------------+      +--------------+
-                          │ read models
-                          ▼
-                   Reading 18 19    Metrics 17
-```
-
-| Draft context | Why | Open |
-|---|---|---|
-| Identity | Own words: account, password, session. Own rule: one email, one account. | |
-| Library | Own words: upload, book, owner. It owns the reader's files and their status. | Who owns the status during conversion? |
-| Conversion | Own words: sandbox, normalise, timeout. Pivotal events 7 and 16 frame it. | A context, or a tool behind a port? |
-| Reading, Metrics | No state change of their own. | Read models, not contexts? |
-
 ## Process
 
 Step ②. Each event gets its cause. A cause with no person is a policy.
 
-| # | Event | Command | Actor | Policy | Read model |
+| # | Event | Command | Role | Policy | View |
 |---|---|---|---|---|---|
 | 1 | `ReaderSignedUp` | `SignUp` | Visitor | | Sign-up form |
 | 2 | `ReaderSignedIn` | `SignIn` | Reader | | Sign-in form |
