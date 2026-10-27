@@ -47,3 +47,30 @@ only once it is added to [decisions.md](decisions.md).
 - **Built:** The check reads the algorithms in `encryption.xml`, and font obfuscation only gives `epub`. Any other algorithm, or a file that does not parse, gives `drm_protected`.
 - **Why:** The EPUB standard uses `encryption.xml` for font obfuscation, and the text stays readable. A reject by file name refuses those DRM-free books (R4, decision 3).
 - **Undo:** Remove `_fonts_only` from `sandbox_check.py`. Every `encryption.xml` then gives `drm_protected`.
+
+## D9. The EPUB page 1 check reads the page, it does not draw it (PR 4, 2026-10-27)
+
+**In short:** An EPUB is ready when its first page holds text or an image after Calibre normalises it.
+
+- **Plan:** Decision 15 and R12 render page 1 in the sandbox before `BookReady`. The stack names `pdftoppm` for this.
+- **Built:** A PDF renders page 1 with `pdftoppm`. An EPUB parses the first spine page of the Calibre output, and passes when its body has text or an image.
+- **Why:** A raster render of an EPUB needs Calibre's Qt WebEngine, a browser engine with many processes, and the sandbox allows 64. The parse runs in the same container and the same time limit.
+- **Undo:** Render the EPUB to PDF with `ebook-convert`, then run `pdftoppm` on page 1. Raise the process limit for that container if WebEngine needs it.
+
+## D10. The sandbox kills a network socket, and the test uses a hostile converter (PR 4, 2026-10-27)
+
+**In short:** A conversion that opens an internet socket stops at once and fails as crashed.
+
+- **Plan:** S5 AC5 gives `evil.epub`, which opens a network socket, `SandboxEscapeBlocked` and then `ConversionFailed(crashed)`. Event 14 also names disk access.
+- **Built:** The convert container runs with Docker's default seccomp profile plus one change: an IPv4 or IPv6 socket kills the process. The test image swaps `ebook-convert` for a program that connects out, and a probe proves the block.
+- **Why:** A book file cannot run code, so only an exploited parser opens a socket, and a test cannot ship a real exploit. With no network alone, a connect fails quietly and looks like a damaged file. The root is read-only, so a disk write fails and has no event.
+- **Undo:** Remove the profile from `convert_command`. A socket then fails with no network, and the book fails as malformed.
+
+## D11. A file name with no printable letter gives the title "Untitled" (PR 4, 2026-10-27)
+
+**In short:** Every ready book has a printable title, also when its file name has none.
+
+- **Plan:** Decision 11 falls back to the file name without its extension.
+- **Built:** Titles and authors lose control characters and extra spaces, and stop at 255 characters. A file name with nothing printable left gives "Untitled".
+- **Why:** The intake keeps control characters in a file name, and the title comes from an untrusted book. The list must show a title that is never empty.
+- **Undo:** Refuse such a file name at intake with `invalid_file_name`. Then remove `UNTITLED`.
