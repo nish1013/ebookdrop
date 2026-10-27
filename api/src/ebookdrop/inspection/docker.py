@@ -3,6 +3,7 @@
 import shutil
 import subprocess
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 from ebookdrop.conversion.port import BookFormat
@@ -14,6 +15,8 @@ from ebookdrop.inspection.port import (
     read_verdict,
 )
 from ebookdrop.inspection.sandbox_check import CRASH_EXIT
+
+Runner = Callable[..., subprocess.CompletedProcess[bytes]]
 
 INSPECT_IMAGE = "ebookdrop-inspect"
 NAME_PREFIX = "ebookdrop-inspect-"
@@ -57,10 +60,14 @@ class DockerInspector:
     """Runs `sandbox_check` in a container with no network and tight limits."""
 
     def __init__(
-        self, image: str = INSPECT_IMAGE, timeout: float = INSPECT_SECONDS
+        self,
+        image: str = INSPECT_IMAGE,
+        timeout: float = INSPECT_SECONDS,
+        run: Runner = subprocess.run,
     ) -> None:
         self._image = image
         self._timeout = timeout
+        self._run = run
 
     def inspect(self, source: Path) -> BookFormat:
         """Pipe `source` to a new container and read its verdict.
@@ -70,7 +77,7 @@ class DockerInspector:
         name = f"{NAME_PREFIX}{uuid.uuid4().hex}"
         try:
             with source.open("rb") as stdin:
-                done = subprocess.run(  # noqa: S603
+                done = self._run(
                     sandbox_command(name, self._image),
                     stdin=stdin,
                     capture_output=True,
@@ -78,7 +85,7 @@ class DockerInspector:
                     check=False,
                 )
         except subprocess.TimeoutExpired:
-            _remove(name)
+            self._remove(name)
             raise FileRefusedError(Refusal.DAMAGED) from None
         except OSError as err:
             raise InspectorUnavailableError("docker did not start") from err
@@ -88,12 +95,9 @@ class DockerInspector:
             raise InspectorUnavailableError(f"docker exit {done.returncode}")
         return read_verdict(done.stdout.decode(errors="replace"))
 
+    def _remove(self, name: str) -> None:
+        self._run([_docker(), "rm", "-f", name], capture_output=True, check=False)
+
 
 def _docker() -> str:
     return shutil.which("docker") or "docker"
-
-
-def _remove(name: str) -> None:
-    subprocess.run(  # noqa: S603
-        [_docker(), "rm", "-f", name], capture_output=True, check=False
-    )
