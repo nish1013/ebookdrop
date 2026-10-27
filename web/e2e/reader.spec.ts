@@ -14,6 +14,12 @@ const HOSTILE_CHAPTER =
   `<script src='http://localhost:5173${PROBE}'></script></head>` +
   "<body><p>Dune</p><img src='missing.png' alt='' onerror=\"localStorage.setItem('pwned', 'handler')\"/></body></html>";
 const HOSTILE = epub("hostile.epub", "hostile.epub", { title: "Dune", chapter: HOSTILE_CHAPTER });
+const HOSTILE_SVG_PAGE =
+  "<svg xmlns='http://www.w3.org/2000/svg' onload=\"localStorage.setItem('pwned', 'handler')\">" +
+  "<script>localStorage.setItem('pwned', 'script')</script>" +
+  `<script href='http://localhost:5173${PROBE}'/>` +
+  "<text x='10' y='40'>Dune</text></svg>";
+const HOSTILE_SVG = epub("hostile-svg.epub", "hostile-svg.epub", { title: "Dune", svgPage: HOSTILE_SVG_PAGE });
 const READY_TIMEOUT = { timeout: 15_000 };
 
 async function readyBook(page: Page, file: BookFile, title: RegExp): Promise<Locator> {
@@ -34,6 +40,21 @@ async function signedInReader(page: Page): Promise<void> {
 async function bookText(page: Page): Promise<string> {
   const books = page.frames().filter((frame) => frame.url().startsWith("blob:"));
   const texts = await Promise.all(books.map((frame) => frame.locator("body").innerText().catch(() => "")));
+  return texts.join("\n");
+}
+
+async function svgText(page: Page): Promise<string> {
+  const books = page.frames().filter((frame) => frame.url().startsWith("blob:"));
+  const texts = await Promise.all(
+    books.map((frame) =>
+      frame
+        .evaluate(() => {
+          const root = document.documentElement;
+          return root.localName === "svg" && document.readyState === "complete" ? root.textContent : "";
+        })
+        .catch(() => ""),
+    ),
+  );
   return texts.join("\n");
 }
 
@@ -105,6 +126,24 @@ test("S8 AC4 Ana opens a book with a script and the script does not run", async 
   await expect.poll(() => refusals.some((text) => text.startsWith("Executing inline event handler"))).toBe(true);
   expect(refusals.some((text) => text.startsWith("Executing inline script"))).toBe(true);
   expect(refusals.some((text) => text.startsWith("Loading the script") && text.includes(PROBE))).toBe(true);
+  expect(probes).toEqual([]);
+  expect(await page.evaluate(() => localStorage.getItem("pwned"))).toBeNull();
+});
+
+test("S8 AC4 Ana opens a book with a script in an SVG page and the script does not run", async ({ page }) => {
+  const probes: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().endsWith(PROBE)) probes.push(request.url());
+  });
+  await signedInReader(page);
+  const book = await readyBook(page, DUNE, /dune/i);
+  await page.route("**/api/books/*/content", (route) =>
+    route.fulfill({ body: HOSTILE_SVG.buffer, contentType: HOSTILE_SVG.mimeType }),
+  );
+
+  await book.getByRole("link", { name: "Read Dune" }).click();
+
+  await expect.poll(() => svgText(page)).toContain("Dune");
   expect(probes).toEqual([]);
   expect(await page.evaluate(() => localStorage.getItem("pwned"))).toBeNull();
 });

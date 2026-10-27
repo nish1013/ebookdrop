@@ -22,9 +22,10 @@ export interface EpubDetails {
   author?: string;
   blank?: boolean;
   chapter?: string;
+  svgPage?: string;
 }
 
-function opf({ title, author }: EpubDetails): string {
+function opf({ title, author, svgPage }: EpubDetails): string {
   const details =
     (title ? `<dc:title>${title}</dc:title>` : "") + (author ? `<dc:creator>${author}</dc:creator>` : "");
   return (
@@ -32,8 +33,9 @@ function opf({ title, author }: EpubDetails): string {
     '<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id">' +
     '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">' +
     `<dc:identifier id="id">urn:uuid:5f1c6d43-9a0e-4c55-8a40-3f0d7c0f0a11</dc:identifier><dc:language>en</dc:language>${details}` +
-    '</metadata><manifest><item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest>' +
-    '<spine><itemref idref="ch1"/></spine></package>'
+    '</metadata><manifest><item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>' +
+    (svgPage ? '<item id="page" href="page.svg" media-type="image/svg+xml"/>' : "") +
+    `</manifest><spine>${svgPage ? '<itemref idref="page"/>' : ""}<itemref idref="ch1"/></spine></package>`
   );
 }
 
@@ -43,6 +45,7 @@ export function epub(name: string, seed = name, details: EpubDetails = {}): Book
     { name: "META-INF/container.xml", data: Buffer.from(CONTAINER) },
     { name: "OEBPS/content.opf", data: Buffer.from(opf(details)) },
     { name: "OEBPS/ch1.xhtml", data: Buffer.from(details.chapter ?? (details.blank ? BLANK_CHAPTER : CHAPTER)) },
+    ...(details.svgPage ? [{ name: "OEBPS/page.svg", data: Buffer.from(details.svgPage) }] : []),
     { name: "OEBPS/seed.txt", data: Buffer.from(seed) },
   ]);
   return { name, mimeType: "application/epub+zip", buffer };
