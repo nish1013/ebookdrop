@@ -8,6 +8,7 @@ failure (F), outside (O). Step ①: timeline and hot spots.
 ```
  ACCOUNT
   1  ReaderSignedUp            U B        a private library exists
+ 1a  SignUpRejected(email_taken)          the email already has an account
   2  ReaderSignedIn            U
   3  ReaderSignedOut           U O        also when the session expires
                                                                  ⚡H13 sign-in method, session length
@@ -96,6 +97,7 @@ Step ②. Each event gets its cause. A cause with no person is a policy.
 | # | Event | Command | Role | Policy | View |
 |---|---|---|---|---|---|
 | 1 | `ReaderSignedUp` | `SignUp` | Visitor | | Sign-up form |
+| 1a | `SignUpRejected(email_taken)` | `SignUp` | Visitor | | Sign-up form with the reason |
 | 2 | `ReaderSignedIn` | `SignIn` | Reader | | Sign-in form |
 | 3 | `ReaderSignedOut` | `SignOut` | Reader, or time | | |
 | 4 | `UploadAbandoned` | `UploadBook` | Reader | | |
