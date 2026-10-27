@@ -3,12 +3,13 @@ import io
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, MetaData, text
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import OperationalError
 
 from ebookdrop.app import conversion_jobs, identity_service, library_removal
 from ebookdrop.conversion.port import (
@@ -39,6 +40,8 @@ DUNE = epub(title="Dune")
 EMMA = epub(title="Emma", seed=1)
 BAD = pdf(title="Bad")
 ANA = "ana@example.com"
+BEN = "ben@example.com"
+CAL = "cal@example.com"
 
 _KEYED_ROWS = {
     "accounts": "SELECT count(*) FROM accounts WHERE id = :reader",
@@ -74,6 +77,19 @@ class AccountDeletedMeanwhileConverter(DuneConverter):
         assert self._client.delete("/api/accounts/me").status_code == 204
         assert self._libraries.poll() == 1
         return super().convert(source, work_dir)
+
+
+class FailsForOneReader(LibraryStore):
+    """P6 of one reader fails, as on a row that the database refuses."""
+
+    def __init__(self, engine: Engine, reader: uuid.UUID) -> None:
+        super().__init__(engine)
+        self._reader = reader
+
+    def remove_library(self, reader_id: uuid.UUID, at: datetime) -> bool:
+        if reader_id == self._reader:
+            raise OperationalError("DELETE FROM books", {}, OSError("refused"))
+        return super().remove_library(reader_id, at)
 
 
 @pytest.fixture
@@ -239,8 +255,8 @@ def test_p6_that_stops_part_way_runs_again_to_the_same_end_state(
     books = _three_books(client, jobs, storage)
     assert client.delete("/api/accounts/me").status_code == 204
 
-    with _refused_removal_inserts(engine), pytest.raises(DBAPIError):
-        libraries.poll()
+    with _refused_removal_inserts(engine):
+        assert libraries.poll() == 0
 
     assert "books: 3" in _remains(engine, tmp_path, reader, books)
     assert libraries.poll() == 1
@@ -293,3 +309,35 @@ def test_an_upload_that_ends_after_the_account_delete_adds_no_book(
         LibraryStore(engine).add_upload(late)
 
     assert _remains(engine, tmp_path, reader, [str(late.book_id)]) == []
+
+
+def test_a_failed_p6_for_one_reader_stops_neither_the_other_readers_nor_p4_nor_p1(
+    client: TestClient,
+    engine: Engine,
+    clock: FakeClock,
+    jobs: ConversionJobs,
+    removals: FileRemoval,
+    tmp_path: Path,
+) -> None:
+    books = {}
+    readers = {}
+    for email in (ANA, CAL):
+        assert sign_up(client, email) == 201
+        assert sign_in(client, email) == 204
+        books[email] = str(upload(client, "dune.epub", DUNE)["id"])
+        readers[email] = reader_id(engine, email)
+    assert jobs.poll() == 2
+    for email in (ANA, CAL):
+        assert sign_in(client, email) == 204
+        assert client.delete("/api/accounts/me").status_code == 204
+    assert sign_up(client, BEN) == 201
+    assert sign_in(client, BEN) == 204
+    upload(client, "emma.epub", EMMA)
+    failing = LibraryRemoval(FailsForOneReader(engine, readers[ANA]), clock)
+    worker = Worker(jobs, removals, failing, identity_service(engine, clock), clock)
+
+    assert worker.tick() == 3
+
+    [ben_book] = client.get("/api/books").json()
+    assert ben_book["status"] == "ready"
+    assert _remains(engine, tmp_path, readers[CAL], [books[CAL]]) == []
