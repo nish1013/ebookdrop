@@ -66,12 +66,12 @@ SessionCookie = Annotated[str | None, Cookie(alias=SESSION_COOKIE)]
 
 def add_identity(app: FastAPI, service: IdentityService) -> None:
     """Add the identity endpoints and their error answers to the app."""
-    router = APIRouter(prefix="/api")
+    router = APIRouter(prefix="/api", responses={422: {"model": ErrorOut}})
 
     @router.post(
         "/accounts",
         status_code=status.HTTP_201_CREATED,
-        responses={409: {"model": ErrorOut}, 422: {"model": ErrorOut}},
+        responses={409: {"model": ErrorOut}},
     )
     def sign_up(body: SignUpIn) -> ReaderOut:
         return ReaderOut(email=service.sign_up(body.email, body.password).value)
