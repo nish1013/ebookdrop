@@ -5,9 +5,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, text
 
+from ebookdrop.app import conversion_jobs
 from ebookdrop.conversion.port import BookFormat, Conversion, ConverterPort
 from ebookdrop.library.conversion_jobs import ConversionJobs
+from ebookdrop.storage import LocalDiskStorage
 from tests.api.conftest import events, upload
+from tests.api.test_upload_storage import stored_files
+from tests.conftest import FakeClock
 from tests.samples import epub
 
 DUNE = epub()
@@ -21,6 +25,20 @@ class DuneConverter:
         cover = work_dir / "cover.png"
         cover.write_bytes(COVER)
         return Conversion(BookFormat.EPUB, book, "Dune", "Frank Herbert", cover)
+
+
+class FailedMeanwhileConverter(DuneConverter):
+    """Fails the book while its conversion runs, as the stuck check can."""
+
+    def __init__(self, engine: Engine) -> None:
+        self._engine = engine
+
+    def convert(self, source: Path, work_dir: Path) -> Conversion:
+        with self._engine.begin() as connection:
+            connection.execute(
+                text("UPDATE books SET status = 'failed', failure = 'crashed'")
+            )
+        return super().convert(source, work_dir)
 
 
 @pytest.fixture
@@ -69,3 +87,26 @@ def test_s6_ac2_p3_again_for_one_conversion_gives_no_second_book_ready(
     assert events(engine, book["id"]).count("book_ready") == 1
     with engine.connect() as connection:
         assert connection.execute(text("SELECT count(*) FROM books")).scalar() == 1
+    assert stored_files(tmp_path) == [
+        f"books/{book['id']}/book.epub",
+        f"books/{book['id']}/cover.png",
+        f"books/{book['id']}/original",
+    ]
+
+
+def test_s6_ac2_book_that_left_processing_leaves_no_converted_file(
+    client: TestClient,
+    engine: Engine,
+    clock: FakeClock,
+    storage: LocalDiskStorage,
+    signed_in_ana: str,
+    tmp_path: Path,
+) -> None:
+    converter = FailedMeanwhileConverter(engine)
+    jobs = conversion_jobs(engine, clock, storage, converter)
+    book = upload(client, "dune.epub", DUNE)
+
+    jobs.poll()
+
+    assert "book_ready" not in events(engine, book["id"])
+    assert stored_files(tmp_path) == [f"books/{book['id']}/original"]
