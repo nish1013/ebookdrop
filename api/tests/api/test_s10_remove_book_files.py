@@ -7,13 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
-from ebookdrop.app import file_removal
-from ebookdrop.conversion.port import ConverterPort
+from ebookdrop.app import conversion_jobs, file_removal
+from ebookdrop.conversion.port import Conversion, ConverterPort
 from ebookdrop.library.conversion_jobs import ConversionJobs
 from ebookdrop.library.file_removal import FileRemoval
 from ebookdrop.storage import LocalDiskStorage
 from tests.api.conftest import events, upload
-from tests.api.test_s6_mark_book_ready import DuneConverter
+from tests.api.test_s6_mark_book_ready import DeletedMeanwhileConverter, DuneConverter
 from tests.api.test_upload_storage import stored_files
 from tests.conftest import FakeClock
 from tests.samples import epub
@@ -203,6 +203,41 @@ def test_p4_waits_longer_after_each_failed_removal_and_logs_the_attempts(
     assert waits[0] < waits[1] < waits[2]
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert [getattr(r, "attempts", None) for r in warnings] == [1, 2, 3, 4]
+
+
+class RemovedMeanwhileConverter(DeletedMeanwhileConverter):
+    """Ana deletes the book while its conversion runs, and P4 runs at once."""
+
+    def __init__(self, client: TestClient, removals: FileRemoval) -> None:
+        super().__init__(client)
+        self._removals = removals
+
+    def convert(self, source: Path, work_dir: Path) -> Conversion:
+        conversion = super().convert(source, work_dir)
+        assert self._removals.poll() == 1
+        return conversion
+
+
+def test_a_book_deleted_while_processing_leaves_no_file_after_p4_and_its_conversion(
+    client: TestClient,
+    engine: Engine,
+    clock: FakeClock,
+    storage: LocalDiskStorage,
+    removals: FileRemoval,
+    signed_in_ana: str,
+    tmp_path: Path,
+) -> None:
+    converter = RemovedMeanwhileConverter(client, removals)
+    jobs = conversion_jobs(engine, clock, storage, converter)
+    book = upload(client, "dune.epub", DUNE)
+    converter.book_id = str(book["id"])
+
+    assert jobs.poll() == 1
+
+    assert removals.poll() == 0
+    assert stored_files(tmp_path) == []
+    assert events(engine, book["id"]).count("book_files_removed") == 1
+    assert "book_ready" not in events(engine, book["id"])
 
 
 def _deleted_book(client: TestClient) -> str:
