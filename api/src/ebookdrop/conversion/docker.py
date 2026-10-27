@@ -23,7 +23,7 @@ from ebookdrop.conversion.sandbox_convert import (
     MAX_BYTES,
     UNREADABLE_EXIT,
 )
-from ebookdrop.sandbox import SANDBOX_IMAGE, Runner, docker, sandbox_command
+from ebookdrop.sandbox import SANDBOX_IMAGE, Runner, remove, sandbox_command
 
 NAME_PREFIX = "ebookdrop-convert-"
 SECCOMP_PROFILE = Path(__file__).with_name("seccomp.json")
@@ -101,7 +101,7 @@ class DockerConverter:
                     check=False,
                 )
         except subprocess.TimeoutExpired:
-            _remove(name)
+            remove(name, self._run)
             raise ConversionFailedError(Failure.TIMED_OUT) from None
         except OSError as err:
             raise ConverterUnavailableError("docker did not start") from err
@@ -112,12 +112,6 @@ class DockerConverter:
             raise ConversionFailedError(Failure.CRASHED) from err
         finally:
             output.unlink(missing_ok=True)
-
-
-def _remove(name: str) -> None:
-    subprocess.run(  # noqa: S603
-        [docker(), "rm", "-f", name], capture_output=True, check=False
-    )
 
 
 def _check_exit(code: int) -> None:
