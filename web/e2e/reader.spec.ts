@@ -7,6 +7,7 @@ import { newEmail, signIn, signUpByApi } from "./identity.steps";
 const DUNE = epub("dune.epub", "reader-dune.epub", { title: "Dune" });
 const EMMA = pdf("emma.pdf", "Emma");
 const PROBE = "/probe.js";
+const BOOK_POLICY = "script-src 'none'";
 const HOSTILE_CHAPTER =
   "<html xmlns='http://www.w3.org/1999/xhtml'><head><title>Dune</title>" +
   "<script>localStorage.setItem('pwned', 'script')</script>" +
@@ -27,6 +28,7 @@ async function signedInReader(page: Page): Promise<void> {
   const email = newEmail();
   await signUpByApi(page.request, email);
   await signIn(page, email);
+  await expect(page).toHaveURL(/\/library$/);
 }
 
 async function bookText(page: Page): Promise<string> {
@@ -89,10 +91,10 @@ test("S8 AC4 Ana opens a book with a script and the script does not run", async 
   const refusals: string[] = [];
   const probes: string[] = [];
   page.on("console", (message) => {
-    if (message.text().startsWith("Refused to")) refusals.push(message.text());
+    if (message.text().includes(BOOK_POLICY)) refusals.push(message.text());
   });
-  page.on("request", (request) => {
-    if (request.url().endsWith(PROBE)) probes.push(request.url());
+  page.on("response", (response) => {
+    if (response.url().endsWith(PROBE)) probes.push(response.url());
   });
   await signedInReader(page);
   const book = await readyBook(page, HOSTILE, /dune/i);
@@ -100,10 +102,9 @@ test("S8 AC4 Ana opens a book with a script and the script does not run", async 
   await book.getByRole("link", { name: "Read Dune" }).click();
 
   await expect.poll(() => bookText(page)).toContain("Dune");
-  await expect
-    .poll(() => refusals.join("\n"))
-    .toMatch(/inline script[\s\S]*inline event handler|inline event handler[\s\S]*inline script/);
-  expect(refusals.join("\n")).toContain(PROBE);
+  await expect.poll(() => refusals.some((text) => text.startsWith("Executing inline event handler"))).toBe(true);
+  expect(refusals.some((text) => text.startsWith("Executing inline script"))).toBe(true);
+  expect(refusals.some((text) => text.startsWith("Loading the script") && text.includes(PROBE))).toBe(true);
   expect(probes).toEqual([]);
   expect(await page.evaluate(() => localStorage.getItem("pwned"))).toBeNull();
 });
