@@ -1,6 +1,7 @@
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
+from typing import BinaryIO
 
 import pytest
 from fastapi.testclient import TestClient
@@ -42,6 +43,28 @@ class FailedMeanwhileConverter(DuneConverter):
                 text("UPDATE books SET status = 'failed', failure = 'crashed'")
             )
         return super().convert(source, work_dir)
+
+
+class DeletedMeanwhileConverter(DuneConverter):
+    """Ana deletes the book while its conversion runs."""
+
+    def __init__(self, client: TestClient) -> None:
+        self._client = client
+        self.book_id = ""
+
+    def convert(self, source: Path, work_dir: Path) -> Conversion:
+        assert self._client.delete(f"/api/books/{self.book_id}").status_code == 204
+        return super().convert(source, work_dir)
+
+
+class SavedKeysStorage(LocalDiskStorage):
+    def __init__(self, root: Path) -> None:
+        super().__init__(root)
+        self.saved: list[str] = []
+
+    def save(self, key: str, source: BinaryIO) -> None:
+        self.saved.append(key)
+        super().save(key, source)
 
 
 @pytest.fixture
@@ -135,6 +158,27 @@ def test_s6_ac2_book_that_left_processing_leaves_no_converted_file(
     jobs.poll()
 
     assert "book_ready" not in events(engine, book["id"])
+    assert stored_files(tmp_path) == [f"books/{book['id']}/original"]
+
+
+def test_s6_ac4_a_book_deleted_during_conversion_never_comes_back(
+    client: TestClient,
+    engine: Engine,
+    clock: FakeClock,
+    signed_in_ana: str,
+    tmp_path: Path,
+) -> None:
+    storage = SavedKeysStorage(tmp_path / "storage")
+    converter = DeletedMeanwhileConverter(client)
+    jobs = conversion_jobs(engine, clock, storage, converter)
+    book = upload(client, "dune.epub", DUNE)
+    converter.book_id = str(book["id"])
+
+    jobs.poll()
+
+    assert f"staging/{book['id']}/book.epub" in storage.saved
+    assert "book_ready" not in events(engine, book["id"])
+    assert client.get("/api/books").json() == []
     assert stored_files(tmp_path) == [f"books/{book['id']}/original"]
 
 

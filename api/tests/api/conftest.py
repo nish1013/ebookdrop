@@ -10,10 +10,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, text
 
-from ebookdrop.app import conversion_jobs
+from ebookdrop.app import conversion_jobs, file_removal
 from ebookdrop.conversion.port import ConverterPort
 from ebookdrop.conversion.stub import StubConverter
 from ebookdrop.library.conversion_jobs import ConversionJobs
+from ebookdrop.library.file_removal import FileRemoval
 from ebookdrop.storage import LocalDiskStorage
 from tests.conftest import FakeClock
 
@@ -229,3 +230,10 @@ def jobs(
     converter: ConverterPort,
 ) -> ConversionJobs:
     return conversion_jobs(engine, clock, storage, converter)
+
+
+@pytest.fixture
+def removals(
+    engine: Engine, clock: FakeClock, storage: LocalDiskStorage
+) -> FileRemoval:
+    return file_removal(engine, clock, storage)

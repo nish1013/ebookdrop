@@ -16,6 +16,7 @@ from ebookdrop.identity.store import IdentityStore
 from ebookdrop.inspection.docker import DockerInspector
 from ebookdrop.inspection.port import InspectorPort
 from ebookdrop.library.conversion_jobs import ConversionJobs
+from ebookdrop.library.file_removal import FileRemoval
 from ebookdrop.library.http import add_library
 from ebookdrop.library.service import LibraryService
 from ebookdrop.library.store import LibraryStore
@@ -40,6 +41,11 @@ def conversion_jobs(
 ) -> ConversionJobs:
     """Build the P1 poller on the same parts as the API."""
     return ConversionJobs(LibraryStore(engine), storage, converter, clock)
+
+
+def file_removal(engine: Engine, clock: Clock, storage: StoragePort) -> FileRemoval:
+    """Build P4, P5 and the staging sweep on the same parts as the API."""
+    return FileRemoval(LibraryStore(engine), storage, clock)
 
 
 def storage_from_env() -> StoragePort:

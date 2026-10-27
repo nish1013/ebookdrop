@@ -16,6 +16,8 @@ MAX_DETAIL_LENGTH = 255
 UNKNOWN_AUTHOR = "Unknown author"
 UNTITLED = "Untitled"
 STUCK_AFTER = timedelta(minutes=5)
+FAILED_KEEP = timedelta(days=7)
+STAGING_KEEP = timedelta(days=1)
 
 
 class BookStatus(StrEnum):
@@ -39,6 +41,10 @@ class BookEvent(StrEnum):
     SANDBOX_ESCAPE_BLOCKED = "sandbox_escape_blocked"
     CONVERSION_FAILED = "conversion_failed"
     BOOK_OPEN_FAILED = "book_open_failed"
+    BOOK_DELETED = "book_deleted"
+    BOOK_DELETED_DURING_CONVERSION = "book_deleted_during_conversion"
+    BOOK_FILES_REMOVED = "book_files_removed"
+    FAILED_UPLOAD_CLEANED_UP = "failed_upload_cleaned_up"
 
 
 class IntakeEvent(StrEnum):
