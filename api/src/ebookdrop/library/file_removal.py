@@ -56,15 +56,25 @@ class FileRemoval:
     def clean_failed(self) -> int:
         """P5: remove the files of each upload that failed `FAILED_KEEP` ago.
 
-        The Failed row stays. Return how many uploads lost their files.
+        The Failed row stays. An upload whose removal fails waits for the next
+        run. Return how many uploads lost their files.
         """
         now = self._clock.now()
-        failed = self._store.failed_to_clean(now - FAILED_KEEP)
-        for book_id in failed:
-            for key in stored_keys(book_id):
-                self._storage.delete(key)
+        cleaned = 0
+        for book_id in self._store.failed_to_clean(now - FAILED_KEEP):
+            try:
+                for key in stored_keys(book_id):
+                    self._storage.delete(key)
+            except OSError:
+                _log.warning(
+                    "failed upload clean-up failed",
+                    exc_info=True,
+                    extra={"book_id": book_id},
+                )
+                continue
             self._store.record(book_id, [BookEvent.FAILED_UPLOAD_CLEANED_UP], now)
-        return len(failed)
+            cleaned += 1
+        return cleaned
 
     def sweep_staging(self) -> int:
         """Remove each staging file older than `STAGING_KEEP` (decision 23).
