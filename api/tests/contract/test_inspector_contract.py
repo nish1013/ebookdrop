@@ -8,7 +8,12 @@ import pytest
 
 from ebookdrop.conversion.port import BookFormat
 from ebookdrop.inspection.docker import DockerInspector, sandbox_command
-from ebookdrop.inspection.port import FileRefusedError, InspectorPort, Refusal
+from ebookdrop.inspection.port import (
+    FileRefusedError,
+    InspectorPort,
+    InspectorUnavailableError,
+    Refusal,
+)
 from tests.fakes import InProcessInspector
 from tests.samples import DRM_ALGORITHM, EPUB_MIMETYPE, cut, epub, pdf
 
@@ -141,3 +146,12 @@ def test_inspect_past_its_time_limit_refuses_and_removes_the_container(
         check=True,
     )
     assert left.stdout.strip() == ""
+
+
+def test_docker_inspector_with_no_image_is_unavailable_not_a_reject(
+    tmp_path: Path,
+) -> None:
+    inspector = DockerInspector("ebookdrop-inspect:absent")
+
+    with pytest.raises(InspectorUnavailableError):
+        inspector.inspect(written(tmp_path, "dune.epub", epub()))
