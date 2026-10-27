@@ -74,14 +74,17 @@ class LocalDiskStorage:
         root = self._path(area)
         if not root.is_dir():
             return []
-        return [
-            StoredFile(
-                path.relative_to(self._root).as_posix(),
-                datetime.fromtimestamp(path.stat().st_mtime, UTC),
-            )
-            for path in root.rglob("*")
-            if path.is_file()
-        ]
+        found: list[StoredFile] = []
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            try:
+                modified = path.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            key = path.relative_to(self._root).as_posix()
+            found.append(StoredFile(key, datetime.fromtimestamp(modified, UTC)))
+        return found
 
     def _path(self, key: str) -> Path:
         parts = PurePosixPath(key).parts
