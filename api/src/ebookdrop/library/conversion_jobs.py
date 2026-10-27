@@ -78,7 +78,8 @@ class ConversionJobs:
         """P3: record `BookReady` once (R13), and move the files to the book key.
 
         The converted files wait in `staging/<upload id>/` until the update.
-        A missing title or author gets its fallback (decision 11).
+        With no update, the staging files go (decision 23). A missing title or
+        author gets its fallback (decision 11).
         """
         files = {f"books/{book_id}/book.{conversion.format}": conversion.book}
         if conversion.cover is not None:
@@ -94,7 +95,7 @@ class ConversionJobs:
         details = BookDetails.extracted(
             conversion.title, conversion.author, self._store.file_name(book_id)
         )
-        return self._store.mark_ready(
+        ready = self._store.mark_ready(
             book_id,
             conversion.format,
             details,
@@ -102,6 +103,10 @@ class ConversionJobs:
             self._clock.now(),
             move,
         )
+        if not ready:
+            for key in files:
+                self._storage.delete(staging_key(book_id, key))
+        return ready
 
     def fail(self, book_id: uuid.UUID, failed: ConversionFailedError) -> bool:
         """Record `ConversionFailed(reason)` once (R13), after an escape its block."""
