@@ -235,18 +235,27 @@ class LibraryStore:
         with self._engine.connect() as connection:
             return list(connection.execute(query).scalars())
 
-    def start_job(self, book_id: uuid.UUID, at: datetime) -> bool:
-        """Start the job once per upload id. Return `False` when it already started."""
+    def start_job(self, book_id: uuid.UUID, at: datetime) -> FileName | None:
+        """Start the job once per upload id, and return the uploaded file name.
+
+        Return `None` when the job already started or its book is gone.
+        """
         claim = (
             update(_jobs)
-            .where(_jobs.c.book_id == book_id, _jobs.c.started_at.is_(None))
+            .where(
+                _jobs.c.book_id == book_id,
+                _jobs.c.started_at.is_(None),
+                _books.c.id == _jobs.c.book_id,
+            )
             .values(started_at=at)
+            .returning(_books.c.file_name)
         )
         with self._engine.begin() as connection:
-            if connection.execute(claim).rowcount != 1:
-                return False
+            name = connection.execute(claim).scalar()
+            if name is None:
+                return None
             _record(connection, book_id, [BookEvent.CONVERSION_STARTED], at)
-        return True
+        return FileName(name)
 
     def record(
         self, book_id: uuid.UUID, names: Sequence[BookEvent], at: datetime
@@ -254,12 +263,6 @@ class LibraryStore:
         """Append the events of one book."""
         with self._engine.begin() as connection:
             _record(connection, book_id, names, at)
-
-    def file_name(self, book_id: uuid.UUID) -> FileName:
-        """Return the uploaded file name of a book."""
-        query = select(_books.c.file_name).where(_books.c.id == book_id)
-        with self._engine.connect() as connection:
-            return FileName(connection.execute(query).scalar_one())
 
     def mark_ready(
         self,

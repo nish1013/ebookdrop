@@ -10,6 +10,7 @@ from sqlalchemy.exc import DBAPIError
 from ebookdrop.app import conversion_jobs
 from ebookdrop.conversion.port import BookFormat, Conversion, ConverterPort
 from ebookdrop.library.conversion_jobs import ConversionJobs
+from ebookdrop.library.domain import FileName
 from ebookdrop.storage import LocalDiskStorage
 from tests.api.conftest import events, upload
 from tests.api.test_upload_storage import stored_files
@@ -106,7 +107,8 @@ def test_s6_ac2_p3_again_for_one_conversion_gives_no_second_book_ready(
     (work_dir / "original").write_bytes(DUNE)
     again = DuneConverter().convert(work_dir / "original", work_dir)
 
-    assert jobs.mark_ready(uuid.UUID(str(book["id"])), again) is False
+    name = FileName("dune.epub")
+    assert jobs.mark_ready(uuid.UUID(str(book["id"])), again, name) is False
 
     assert events(engine, book["id"]).count("book_ready") == 1
     with engine.connect() as connection:
