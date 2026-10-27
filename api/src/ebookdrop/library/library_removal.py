@@ -16,4 +16,7 @@ class LibraryRemoval:
 
         Return how many.
         """
-        return 0
+        done = 0
+        for reader_id in self._store.deleted_accounts(limit):
+            done += self._store.remove_library(reader_id, self._clock.now())
+        return done

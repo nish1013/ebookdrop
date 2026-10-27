@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { api } from "../api/client";
 import { BookList } from "./BookList";
 import type { BookOut } from "./library.constants";
@@ -50,6 +50,7 @@ export function LibraryPage() {
     <main>
       <header>
         <span>{email}</span>
+        <Link to="/account">Account</Link>
         <button type="button" onClick={signOut}>
           Sign out
         </button>

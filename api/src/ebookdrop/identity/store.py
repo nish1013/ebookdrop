@@ -51,6 +51,12 @@ _failures = Table(
     Column("email_key", Text),
     Column("at", DateTime(timezone=True)),
 )
+_deletions = Table(
+    "account_deletions",
+    _metadata,
+    Column("reader_id", UUID(as_uuid=True), primary_key=True),
+    Column("queued_at", DateTime(timezone=True)),
+)
 _account_email_key = func.lower(func.trim(_accounts.c.email))
 
 
@@ -124,6 +130,25 @@ class IdentityStore:
         with self._engine.begin() as connection:
             connection.execute(
                 delete(_sessions).where(_sessions.c.token_hash == token_hash)
+            )
+
+    def delete_account(self, account_id: uuid.UUID, at: datetime) -> None:
+        """Remove the account, its sessions and its failed sign-ins, and queue P6.
+
+        The sessions go by `ON DELETE CASCADE`. A missing account is not an error.
+        """
+        removed = (
+            delete(_accounts)
+            .where(_accounts.c.id == account_id)
+            .returning(_account_email_key)
+        )
+        with self._engine.begin() as connection:
+            key = connection.execute(removed).scalar()
+            if key is None:
+                return
+            connection.execute(delete(_failures).where(_failures.c.email_key == key))
+            connection.execute(
+                insert(_deletions), {"reader_id": account_id, "queued_at": at}
             )
 
     def record_failure(self, email: Email, at: datetime) -> None:

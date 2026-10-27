@@ -30,6 +30,8 @@ class FileRemoval:
     def poll(self, limit: int = 10) -> int:
         """P4: remove the files of up to `limit` deleted books. Return how many.
 
+        The staging files of a stopped conversion go too.
+
         A removal that fails waits longer after each failure, so the removals that
         keep failing do not block the others.
         """
@@ -37,8 +39,11 @@ class FileRemoval:
         done = 0
         for removal in self._store.waiting_removals(now, limit):
             try:
+                staged = self._storage.files(f"{STAGING}/{removal.book_id}")
                 for key in stored_keys(removal.book_id):
                     self._storage.delete(key)
+                for stored in staged:
+                    self._storage.delete(stored.key)
             except OSError:
                 attempts = removal.attempts + 1
                 _log.warning(

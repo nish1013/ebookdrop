@@ -121,6 +121,17 @@ def add_identity(app: FastAPI, service: IdentityService) -> None:
             SESSION_COOKIE, httponly=True, secure=True, samesite="lax"
         )
 
+    @router.delete(
+        "/accounts/me",
+        status_code=status.HTTP_204_NO_CONTENT,
+        responses={401: {"model": ErrorOut}},
+    )
+    def delete_account(reader: Reader, response: Response) -> None:
+        service.delete_account(reader)
+        response.delete_cookie(
+            SESSION_COOKIE, httponly=True, secure=True, samesite="lax"
+        )
+
     @app.exception_handler(IdentityError)
     def refuse(_: Request, err: IdentityError) -> JSONResponse:
         code, reason = _ANSWERS[type(err)]

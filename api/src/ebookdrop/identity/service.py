@@ -68,6 +68,10 @@ class IdentityService:
         """End the session of the token."""
         self._store.end_session(_digest(token))
 
+    def delete_account(self, reader: SignedInReader) -> None:
+        """`DeleteAccount`: sign-in stops at once. P6 removes the library later."""
+        self._store.delete_account(reader.id, self._clock.now())
+
     def signed_in(self, token: str) -> SignedInReader | None:
         """Return the reader of the token's live session, or `None`."""
         return self._store.find_session_reader(_digest(token), self._clock.now())

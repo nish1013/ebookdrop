@@ -68,8 +68,9 @@ class Worker:
         """Run the stuck check (P2) and the daily cleanup when due, then the polls.
 
         The daily cleanup is P5 and the staging sweep, each in its own guard, so
-        one failure waits a day and stops nothing else. Return how many jobs and
-        file removals (P4) the polls took.
+        one failure waits a day and stops nothing else. P6 runs before P4, so
+        the files of a removed library go in the same tick. Return how many
+        libraries (P6), file removals (P4) and jobs the polls took.
         """
         now = self._clock.now()
         if self._next_stuck_check is None or now >= self._next_stuck_check:
@@ -79,7 +80,8 @@ class Worker:
             self._next_cleanup = now + CLEANUP_EVERY
             _guarded(self._removals.clean_failed)
             _guarded(self._removals.sweep_staging)
-        return self._removals.poll() + self._jobs.poll()
+        libraries = self._libraries.poll()
+        return libraries + self._removals.poll() + self._jobs.poll()
 
     def run_until(self, stop: threading.Event) -> None:
         """Tick until `stop` is set. A failed tick waits for the next one."""
