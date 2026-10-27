@@ -162,13 +162,13 @@ def test_s12_ac1_ana_deletes_her_account_and_no_row_or_file_of_her_3_books_stays
 
     assert client.delete("/api/accounts/me").status_code == 204
 
-    assert sign_in(client, ANA) == 401
     client.cookies.set("session", token)
     assert client.get("/api/books").status_code == 401
     assert libraries.poll() == 1
     assert removals.poll() == 3
     assert jobs.poll() == 0
     assert _remains(engine, tmp_path, reader, books) == []
+    assert sign_in(client, ANA) == 401
 
 
 def test_s12_ac2_ana_signs_up_again_with_the_same_email_and_has_an_empty_library(
@@ -265,11 +265,13 @@ def test_an_upload_that_ends_after_the_account_delete_adds_no_book(
     client: TestClient,
     engine: Engine,
     clock: FakeClock,
+    libraries: LibraryRemoval,
     signed_in_ana: str,
     tmp_path: Path,
 ) -> None:
     reader = reader_id(engine, ANA)
     assert client.delete("/api/accounts/me").status_code == 204
+    assert libraries.poll() == 1
     late = NewUpload(
         uuid.uuid4(),
         reader,
