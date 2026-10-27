@@ -52,6 +52,9 @@ class LibraryService:
     def upload(self, reader_id: uuid.UUID, received: ReceivedFile) -> Book:
         """Inspect a fully received file, then add it as a book (R5, R6, R10).
 
+        The file is saved before the transaction, so no row lock waits on disk
+        writes. A refused or failed add deletes it.
+
         Raise `UploadRejectedError`, `DuplicateUploadError` or
         `InspectUnavailableError`. Each reject is recorded.
         """
@@ -66,22 +69,13 @@ class LibraryService:
             received.size,
             self._clock.now(),
         )
-
-        def save() -> None:
-            with received.path.open("rb") as source:
-                self._storage.save(original_key(book_id), source)
-
+        key = original_key(book_id)
         try:
-            return self._store.add_upload(upload, save)
-        except UploadRejectedError as rejected:
-            raise self.reject(reader_id, rejected.reason) from None
-        except DuplicateUploadError:
-            self._store.record_intake(
-                reader_id,
-                IntakeEvent.DUPLICATE_UPLOAD_DETECTED,
-                None,
-                self._clock.now(),
-            )
+            with received.path.open("rb") as source:
+                self._storage.save(key, source)
+            return self._add(upload)
+        except Exception:
+            self._storage.delete(key)
             raise
 
     def reject(self, reader_id: uuid.UUID, reason: RejectReason) -> UploadRejectedError:
@@ -106,6 +100,20 @@ class LibraryService:
         if not self._store.has_cover(reader_id, book_id):
             raise BookNotFoundError
         return self._storage.open(cover_key(book_id))
+
+    def _add(self, upload: NewUpload) -> Book:
+        try:
+            return self._store.add_upload(upload)
+        except UploadRejectedError as rejected:
+            raise self.reject(upload.reader_id, rejected.reason) from None
+        except DuplicateUploadError:
+            self._store.record_intake(
+                upload.reader_id,
+                IntakeEvent.DUPLICATE_UPLOAD_DETECTED,
+                None,
+                self._clock.now(),
+            )
+            raise
 
     def _inspect(self, reader_id: uuid.UUID, received: ReceivedFile) -> None:
         try:

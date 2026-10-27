@@ -1,7 +1,7 @@
 """Library rows in Postgres."""
 
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -105,11 +105,10 @@ class LibraryStore:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
-    def add_upload(self, upload: NewUpload, save: Callable[[], None]) -> Book:
-        """Add the book under R6 and R10, then `save` its file, in one transaction.
+    def add_upload(self, upload: NewUpload) -> Book:
+        """Add the book under R6 and R10 in one transaction.
 
-        The file is saved only when both guards pass. The commit then makes the
-        book and its outbox job (P1) visible together.
+        The commit makes the book and its outbox job (P1) visible together.
         """
         row = {
             "id": upload.book_id,
@@ -127,7 +126,6 @@ class LibraryStore:
                 connection.execute(insert(_books), row)
                 if not _use_quota(connection, upload.reader_id, upload.size):
                     raise UploadRejectedError(RejectReason.OVER_QUOTA)
-                save()
                 connection.execute(
                     insert(_jobs), {"book_id": upload.book_id, "queued_at": upload.at}
                 )
