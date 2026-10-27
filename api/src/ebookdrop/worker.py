@@ -13,6 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from ebookdrop.app import (
     conversion_jobs,
     file_removal,
+    identity_service,
     library_removal,
     storage_from_env,
 )
@@ -51,15 +52,27 @@ class Libraries(Protocol):
     def poll(self) -> int: ...
 
 
+class Failures(Protocol):
+    """The sign-in failure cleanup the worker runs once a day."""
+
+    def forget_old_failures(self) -> int: ...
+
+
 class Worker:
     """Runs the library steps in one process."""
 
     def __init__(
-        self, jobs: Jobs, removals: Removals, libraries: Libraries, clock: Clock
+        self,
+        jobs: Jobs,
+        removals: Removals,
+        libraries: Libraries,
+        failures: Failures,
+        clock: Clock,
     ) -> None:
         self._jobs = jobs
         self._removals = removals
         self._libraries = libraries
+        self._failures = failures
         self._clock = clock
         self._next_stuck_check: datetime | None = None
         self._next_cleanup: datetime | None = None
@@ -67,7 +80,8 @@ class Worker:
     def tick(self) -> int:
         """Run the stuck check (P2) and the daily cleanup when due, then the polls.
 
-        The daily cleanup is P5 and the staging sweep, each in its own guard, so
+        The daily cleanup is P5, the staging sweep and the sign-in failures past
+        their window, each in its own guard, so
         one failure waits a day and stops nothing else. P6 runs before P4, so
         the files of a removed library go in the same tick. Return how many
         libraries (P6), file removals (P4) and jobs the polls took.
@@ -80,6 +94,7 @@ class Worker:
             self._next_cleanup = now + CLEANUP_EVERY
             _guarded(self._removals.clean_failed)
             _guarded(self._removals.sweep_staging)
+            _guarded(self._failures.forget_old_failures)
         libraries = self._libraries.poll()
         return libraries + self._removals.poll() + self._jobs.poll()
 
@@ -104,7 +119,8 @@ def main() -> None:
     jobs = conversion_jobs(engine, clock, storage, DockerConverter())
     removals = file_removal(engine, clock, storage)
     libraries = library_removal(engine, clock)
-    Worker(jobs, removals, libraries, clock).run_until(threading.Event())
+    failures = identity_service(engine, clock)
+    Worker(jobs, removals, libraries, failures, clock).run_until(threading.Event())
 
 
 def _guarded(step: Callable[[], int]) -> None:

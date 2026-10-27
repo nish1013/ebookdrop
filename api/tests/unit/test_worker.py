@@ -19,7 +19,9 @@ class RecordingJobs:
 def test_p2_runs_once_a_minute_in_the_worker() -> None:
     clock = FakeClock()
     jobs = RecordingJobs()
-    worker = Worker(jobs, RecordingRemovals(), RecordingLibraries(), clock)
+    worker = Worker(
+        jobs, RecordingRemovals(), RecordingLibraries(), RecordingFailures(), clock
+    )
     checks = []
 
     for step in (0, 30, 30, 59, 1):
@@ -51,18 +53,30 @@ class RecordingRemovals:
         return 0
 
 
-def test_p4_runs_on_each_tick_and_p5_with_the_staging_sweep_once_a_day() -> None:
+class RecordingFailures:
+    def __init__(self) -> None:
+        self.cleanups = 0
+
+    def forget_old_failures(self) -> int:
+        self.cleanups += 1
+        return 0
+
+
+def test_p4_runs_on_each_tick_and_the_daily_cleanup_once_a_day() -> None:
     clock = FakeClock()
     removals = RecordingRemovals()
-    worker = Worker(RecordingJobs(), removals, RecordingLibraries(), clock)
+    failures = RecordingFailures()
+    worker = Worker(RecordingJobs(), removals, RecordingLibraries(), failures, clock)
     runs = []
 
     for step in (timedelta(0), timedelta(hours=23), timedelta(hours=1), timedelta(0)):
         clock.advance(step)
         worker.tick()
-        runs.append((removals.polls, removals.cleanups, removals.sweeps))
+        runs.append(
+            (removals.polls, removals.cleanups, removals.sweeps, failures.cleanups)
+        )
 
-    assert runs == [(1, 1, 1), (2, 1, 1), (3, 2, 2), (4, 2, 2)]
+    assert runs == [(1, 1, 1, 1), (2, 1, 1, 1), (3, 2, 2, 2), (4, 2, 2, 2)]
 
 
 class BrokenCleanupRemovals(RecordingRemovals):
@@ -72,7 +86,13 @@ class BrokenCleanupRemovals(RecordingRemovals):
 
 def test_a_failed_p5_leaves_the_staging_sweep_and_the_polls_running() -> None:
     removals = BrokenCleanupRemovals()
-    worker = Worker(RecordingJobs(), removals, RecordingLibraries(), FakeClock())
+    worker = Worker(
+        RecordingJobs(),
+        removals,
+        RecordingLibraries(),
+        RecordingFailures(),
+        FakeClock(),
+    )
 
     worker.tick()
 
@@ -94,6 +114,7 @@ def test_p6_runs_on_each_tick_before_p4_and_counts_as_taken() -> None:
         RecordingJobs(),
         RecordingRemovals(steps),
         RecordingLibraries(steps),
+        RecordingFailures(),
         FakeClock(),
     )
 

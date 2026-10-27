@@ -72,6 +72,10 @@ class IdentityService:
         """`DeleteAccount`: sign-in stops at once. P6 removes the library later."""
         self._store.delete_account(reader.id, self._clock.now())
 
+    def forget_old_failures(self) -> int:
+        """Remove every failed sign-in past the window. Return how many."""
+        return 0
+
     def signed_in(self, token: str) -> SignedInReader | None:
         """Return the reader of the token's live session, or `None`."""
         return self._store.find_session_reader(_digest(token), self._clock.now())

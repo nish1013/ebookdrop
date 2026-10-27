@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, MetaData, text
 from sqlalchemy.exc import DBAPIError
 
-from ebookdrop.app import conversion_jobs, library_removal
+from ebookdrop.app import conversion_jobs, identity_service, library_removal
 from ebookdrop.conversion.port import (
     Conversion,
     ConversionFailedError,
@@ -23,6 +23,7 @@ from ebookdrop.library.file_removal import FileRemoval
 from ebookdrop.library.library_removal import LibraryRemoval
 from ebookdrop.library.store import LibraryStore, NewUpload
 from ebookdrop.storage import LocalDiskStorage
+from ebookdrop.worker import CLEANUP_EVERY, Worker
 from tests.api.conftest import (
     reader_id,
     sign_in,
@@ -148,6 +149,7 @@ def _three_books(
 def test_s12_ac1_ana_deletes_her_account_and_no_row_or_file_of_her_3_books_stays(
     client: TestClient,
     engine: Engine,
+    clock: FakeClock,
     jobs: ConversionJobs,
     libraries: LibraryRemoval,
     removals: FileRemoval,
@@ -169,6 +171,12 @@ def test_s12_ac1_ana_deletes_her_account_and_no_row_or_file_of_her_3_books_stays
     assert jobs.poll() == 0
     assert _remains(engine, tmp_path, reader, books) == []
     assert sign_in(client, ANA) == 401
+
+    worker = Worker(jobs, removals, libraries, identity_service(engine, clock), clock)
+    worker.tick()
+    clock.advance(CLEANUP_EVERY)
+    worker.tick()
+    assert _remains(engine, tmp_path, reader, books) == []
 
 
 def test_s12_ac2_ana_signs_up_again_with_the_same_email_and_has_an_empty_library(
