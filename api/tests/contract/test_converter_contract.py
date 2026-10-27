@@ -18,6 +18,8 @@ from tests.samples import EPUB_MIMETYPE, PNG_MAGIC, cut, epub, pdf
 
 # The hostile converter with the title "hang" never ends, so any limit is passed.
 HANG_SECONDS = 3.0
+# Long enough to pipe the flood of "flood", which then hangs past the limit.
+FLOOD_SECONDS = 30.0
 
 
 @pytest.fixture(params=["stub", "docker"])
@@ -37,6 +39,16 @@ def written(tmp_path: Path, name: str, data: bytes) -> Path:
     path.parent.mkdir(exist_ok=True)
     path.write_bytes(data)
     return path
+
+
+def containers_left() -> str:
+    left = subprocess.run(
+        ["docker", "ps", "-aq", "--filter", "name=ebookdrop-convert-"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return left.stdout.strip()
 
 
 def work(tmp_path: Path) -> Path:
@@ -139,13 +151,20 @@ def test_sandbox_converter_past_its_time_limit_fails_and_removes_the_container(
         converter.convert(written(tmp_path, "slow.epub", hang), work(tmp_path))
 
     assert failed.value.failure == Failure.TIMED_OUT
-    left = subprocess.run(
-        ["docker", "ps", "-aq", "--filter", "name=ebookdrop-convert-"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert left.stdout.strip() == ""
+    assert containers_left() == ""
+
+
+def test_sandbox_converter_output_past_its_cap_fails_and_removes_the_container(
+    evil_image: str, tmp_path: Path
+) -> None:
+    converter = DockerConverter(evil_image, timeout=FLOOD_SECONDS)
+    flood = epub(title="flood")
+
+    with pytest.raises(ConversionFailedError) as failed:
+        converter.convert(written(tmp_path, "flood.epub", flood), work(tmp_path))
+
+    assert failed.value.failure == Failure.CRASHED
+    assert containers_left() == ""
 
 
 def test_sandbox_converter_blocks_a_book_that_opens_a_socket(
