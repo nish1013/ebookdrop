@@ -30,14 +30,12 @@ _accounts = Table(
     Column("id", UUID(as_uuid=True), primary_key=True),
     Column("email", Text),
     Column("password_hash", Text),
-    Column("created_at", DateTime(timezone=True)),
 )
 _sessions = Table(
     "sessions",
     _metadata,
     Column("token_hash", Text, primary_key=True),
     Column("account_id", UUID(as_uuid=True)),
-    Column("started_at", DateTime(timezone=True)),
     Column("expires_at", DateTime(timezone=True)),
 )
 _failures = Table(
@@ -54,7 +52,6 @@ class AccountRow:
     """One account as the store holds it."""
 
     id: uuid.UUID
-    email: str
     password_hash: str
 
 
@@ -64,14 +61,13 @@ class IdentityStore:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
-    def add_account(self, email: Email, password_hash: str, now: datetime) -> uuid.UUID:
+    def add_account(self, email: Email, password_hash: str) -> uuid.UUID:
         """Insert an account. Raise `EmailTakenError` when the unique key refuses it."""
         account_id = uuid.uuid4()
         row = {
             "id": account_id,
             "email": email.value,
             "password_hash": password_hash,
-            "created_at": now,
         }
         try:
             with self._engine.begin() as connection:
@@ -84,23 +80,18 @@ class IdentityStore:
 
     def find_account(self, email: Email) -> AccountRow | None:
         """Return the account with this email key, or `None`."""
-        query = select(_accounts.c.id, _accounts.c.email, _accounts.c.password_hash)
+        query = select(_accounts.c.id, _accounts.c.password_hash)
         with self._engine.connect() as connection:
             row = connection.execute(query.where(_email_key == email.key)).first()
-        return AccountRow(row.id, row.email, row.password_hash) if row else None
+        return AccountRow(row.id, row.password_hash) if row else None
 
     def start_session(
-        self,
-        token_hash: str,
-        account_id: uuid.UUID,
-        now: datetime,
-        expires_at: datetime,
+        self, token_hash: str, account_id: uuid.UUID, expires_at: datetime
     ) -> None:
         """Store a session for the account."""
         row = {
             "token_hash": token_hash,
             "account_id": account_id,
-            "started_at": now,
             "expires_at": expires_at,
         }
         with self._engine.begin() as connection:

@@ -18,7 +18,6 @@ def upgrade() -> None:
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
         sa.Column("email", sa.Text, nullable=False),
         sa.Column("password_hash", sa.Text, nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index(
         "accounts_email_key",
@@ -35,7 +34,6 @@ def upgrade() -> None:
             sa.ForeignKey("accounts.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_table(

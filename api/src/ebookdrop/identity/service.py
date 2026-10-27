@@ -33,7 +33,7 @@ class IdentityService:
     def sign_up(self, raw_email: str, password: str) -> Email:
         """Add an account. Raise `InvalidEmailError` or `EmailTakenError`."""
         email = Email.parse(raw_email)
-        self._store.add_account(email, _hasher.hash(password), self._clock.now())
+        self._store.add_account(email, _hasher.hash(password))
         return email
 
     def sign_in(self, raw_email: str, password: str) -> str:
@@ -57,10 +57,10 @@ class IdentityService:
         except VerifyMismatchError as err:
             self._store.record_failure(email, now)
             raise WrongEmailOrPasswordError from err
-        if account is None:
+        if account is None:  # the password matched the random dummy hash
             raise WrongEmailOrPasswordError
         token = secrets.token_urlsafe(32)
-        self._store.start_session(_digest(token), account.id, now, now + SESSION_LENGTH)
+        self._store.start_session(_digest(token), account.id, now + SESSION_LENGTH)
         return token
 
     def sign_out(self, token: str) -> None:
