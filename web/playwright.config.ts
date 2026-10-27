@@ -12,6 +12,9 @@ export default defineConfig({
       url: "http://127.0.0.1:8000/openapi.json",
       timeout: 120_000,
     },
-    { command: "npm run dev -- --port 5173 --strictPort", url: "http://localhost:5173" },
+    {
+      command: "npm run build && npx vite preview --port 5173 --strictPort",
+      url: "http://localhost:5173",
+    },
   ],
 });
