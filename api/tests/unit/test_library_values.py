@@ -1,3 +1,4 @@
+import io
 from datetime import timedelta
 from pathlib import Path
 
@@ -65,3 +66,22 @@ def test_a_removal_waits_10_s_then_doubles_up_to_1_h_after_any_failure_count() -
         timedelta(hours=1),
         timedelta(hours=1),
     ]
+
+
+def test_storage_files_skips_a_file_that_another_process_removes_while_it_lists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    storage = LocalDiskStorage(tmp_path)
+    storage.save("staging/a/book.epub", io.BytesIO(b"x"))
+    storage.save("staging/b/book.epub", io.BytesIO(b"x"))
+    is_file = Path.is_file
+
+    def removed_after_the_check(path: Path) -> bool:
+        found = is_file(path)
+        if path.parent.name == "a":
+            path.unlink()
+        return found
+
+    monkeypatch.setattr(Path, "is_file", removed_after_the_check)
+
+    assert [f.key for f in storage.files("staging")] == ["staging/b/book.epub"]
