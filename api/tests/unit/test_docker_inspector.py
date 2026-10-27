@@ -44,3 +44,16 @@ def test_inspect_past_its_time_limit_is_damaged_and_removes_the_container(
 
     assert refused.value.refusal == Refusal.DAMAGED
     assert docker.verbs[-1] == "rm"
+
+
+@pytest.mark.parametrize("remove", ["hangs", "fails"])
+def test_inspect_result_stands_when_the_container_remove_goes_wrong(
+    book: Path, remove: str
+) -> None:
+    docker = FakeDocker(slow_run=True, remove=remove)
+
+    with pytest.raises(FileRefusedError) as refused:
+        DockerInspector(run=docker).inspect(book)
+
+    assert refused.value.refusal == Refusal.DAMAGED
+    assert docker.verbs[-1] == "rm"
