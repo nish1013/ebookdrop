@@ -15,7 +15,7 @@ from ebookdrop.app import conversion_jobs
 from ebookdrop.clock import SystemClock
 from ebookdrop.conversion.docker import DockerConverter
 from ebookdrop.storage import LocalDiskStorage
-from ebookdrop.worker import run_until
+from ebookdrop.worker import Worker
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -28,13 +28,15 @@ with (
     config = Config(os.path.join(HERE, "alembic.ini"))
     config.set_main_option("script_location", os.path.join(HERE, "migrations"))
     command.upgrade(config, "head")
+    clock = SystemClock()
     jobs = conversion_jobs(
         create_engine(os.environ["DATABASE_URL"]),
-        SystemClock(),
+        clock,
         LocalDiskStorage(Path(storage_dir)),
         DockerConverter(),
     )
     stop = threading.Event()
-    threading.Thread(target=run_until, args=(stop, jobs), daemon=True).start()
+    worker = Worker(jobs, clock)
+    threading.Thread(target=worker.run_until, args=(stop,), daemon=True).start()
     uvicorn.run("ebookdrop.app:app_from_env", factory=True, host="127.0.0.1", port=8000)
     stop.set()
