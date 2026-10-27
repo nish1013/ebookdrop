@@ -13,7 +13,7 @@ Rules
 | AC | Given | When | Then |
 |---|---|---|---|
 | AC1 | No account for `ana@example.com` | Ana signs up with `ana@example.com` | `ReaderSignedUp`: Ana has an empty library |
-| AC2 | An account for `ana@example.com` | Ben signs up with ` ANA@example.com` | Ben sees "This email already has an account" |
+| AC2 | An account for `ana@example.com` | Ben signs up with ` ANA@example.com` | `SignUpRejected(email_taken)`: Ben sees "This email already has an account" |
 | AC3 | No account for `ana@example.com` | Two sign-ups with `ana@example.com` arrive in the same second | One `ReaderSignedUp`. The other sign-up sees AC2. |
 
 Questions: Q13.

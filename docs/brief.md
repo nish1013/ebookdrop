@@ -12,8 +12,14 @@
 | Now | The reader emails files to a device vendor address, or converts them on a desktop tool and copies them by USB cable. |
 | Constraints | Playground time box of 2 weeks (assumed). Stack is open. |
 | Risk tier | `high bar`: untrusted file parsing (security) and private libraries (personal data). |
+| Stage | `mvp`: the metric tests whether readers want it, in a 2-week box. Parsing, personal data and the quota race get `v1` rigour. |
 
-High-bar checks: file size limit, type check by content and not by extension, conversion in a sandbox with a timeout, each library visible to its owner only.
+High-bar checks:
+
+- a file size limit
+- a type check by content, not by extension
+- conversion in a sandbox with a timeout
+- each library visible to its owner only
 
 ## Pushback
 
