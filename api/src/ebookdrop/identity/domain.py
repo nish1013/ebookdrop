@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+MAX_EMAIL_LENGTH = 254
+
 
 class IdentityError(Exception):
     """Root of the identity errors."""
@@ -20,4 +22,16 @@ class Email:
 
     @classmethod
     def parse(cls, raw: str) -> "Email":
-        return cls(raw, raw)
+        """Trim the text and check its shape. Raise `InvalidEmailError` when wrong."""
+        value = raw.strip()
+        local, at, domain = value.partition("@")
+        if (
+            not at
+            or not local
+            or "@" in domain
+            or "." not in domain.strip(".")
+            or any(char.isspace() for char in value)
+            or len(value) > MAX_EMAIL_LENGTH
+        ):
+            raise InvalidEmailError
+        return cls(value, value.lower())
