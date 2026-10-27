@@ -34,7 +34,6 @@ export function ReaderPage() {
       <iframe
         ref={frame}
         title="Book"
-        sandbox="allow-scripts allow-same-origin"
         src={readerUrl(bookId)}
         hidden={message !== undefined}
         style={{ width: "100%", height: "85vh", border: 0 }}

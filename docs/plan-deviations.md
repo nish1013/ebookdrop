@@ -86,11 +86,11 @@ only once it is added to [decisions.md](decisions.md).
 
 ## D13. Book frames allow scripts, and a policy blocks them (PR 6, 2026-10-27)
 
-**In short:** Every page of a book carries a policy that runs no script, because the frame sandbox alone cannot stop one.
+**In short:** The reader removes every script from a book page, because a frame sandbox cannot stop one.
 
 - **Plan:** The reader shows a book in a sandboxed iframe with CSP `script-src 'none'` (S8 AC4, threat model).
-- **Built:** The reader frame and the foliate-js page frames have `allow-scripts allow-same-origin`. Each EPUB page gets a `script-src 'none'` meta policy first in its head, and `reader.html` allows scripts from its own origin only.
-- **Why:** foliate-js reads the page frame document, so the frame needs the same origin, and it sets `allow-scripts` on its frames. With both flags, a sandbox does not stop a script, so the policy is the guard.
+- **Built:** The reader frame has no sandbox, because foliate-js needs scripts and the same origin. Each XHTML, HTML and SVG page loses its scripts and handlers, and each XHTML and HTML page gets a `script-src 'none'` meta policy.
+- **Why:** foliate-js reads the page frame document and sets `allow-scripts` on its frames. With both flags, a sandbox stops no script. So the script removal, the page policy and the `reader.html` policy are the guard.
 - **Undo:** Render each page in a frame without `allow-scripts` through a patched foliate-js. The policy then stays as a second guard.
 
 ## D14. A book that is not Ready answers 404 (PR 6, 2026-10-27)
