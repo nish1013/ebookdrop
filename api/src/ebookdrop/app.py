@@ -39,9 +39,7 @@ def conversion_jobs(
     engine: Engine, clock: Clock, storage: StoragePort, converter: ConverterPort
 ) -> ConversionJobs:
     """Build the P1 poller on the same parts as the API."""
-    store = LibraryStore(engine)
-    library = LibraryService(store, storage, clock, DockerInspector())
-    return ConversionJobs(store, storage, converter, library, clock)
+    return ConversionJobs(LibraryStore(engine), storage, converter, clock)
 
 
 def storage_from_env() -> StoragePort:

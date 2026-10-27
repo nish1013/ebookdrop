@@ -7,12 +7,7 @@ from sqlalchemy import Engine, text
 
 from ebookdrop.conversion.port import BookFormat, Conversion, ConverterPort
 from ebookdrop.library.conversion_jobs import ConversionJobs
-from ebookdrop.library.service import LibraryService
-from ebookdrop.library.store import LibraryStore
-from ebookdrop.storage import LocalDiskStorage
 from tests.api.conftest import events, upload
-from tests.conftest import FakeClock
-from tests.fakes import InProcessInspector
 from tests.samples import epub
 
 DUNE = epub()
@@ -57,8 +52,6 @@ def test_s6_ac1_ready_book_shows_title_author_and_cover(
 def test_s6_ac2_p3_again_for_one_conversion_gives_no_second_book_ready(
     client: TestClient,
     engine: Engine,
-    storage: LocalDiskStorage,
-    clock: FakeClock,
     jobs: ConversionJobs,
     signed_in_ana: str,
     tmp_path: Path,
@@ -69,9 +62,8 @@ def test_s6_ac2_p3_again_for_one_conversion_gives_no_second_book_ready(
     work_dir.mkdir()
     (work_dir / "original").write_bytes(DUNE)
     again = DuneConverter().convert(work_dir / "original", work_dir)
-    library = LibraryService(LibraryStore(engine), storage, clock, InProcessInspector())
 
-    assert library.mark_ready(uuid.UUID(str(book["id"])), again) is False
+    assert jobs.mark_ready(uuid.UUID(str(book["id"])), again) is False
 
     assert events(engine, book["id"]).count("book_ready") == 1
     with engine.connect() as connection:

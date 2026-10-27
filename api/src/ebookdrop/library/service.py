@@ -1,10 +1,9 @@
-"""Library commands: upload a book, mark it ready, and the library list."""
+"""Library commands: upload a book and the library list."""
 
 import uuid
 from typing import BinaryIO
 
 from ebookdrop.clock import Clock
-from ebookdrop.conversion.port import Conversion
 from ebookdrop.inspection.port import (
     FileRefusedError,
     InspectorPort,
@@ -107,22 +106,6 @@ class LibraryService:
         if not self._store.has_cover(reader_id, book_id):
             raise BookNotFoundError
         return self._storage.open(cover_key(book_id))
-
-    def mark_ready(self, book_id: uuid.UUID, conversion: Conversion) -> bool:
-        """P3: store the converted files and record `BookReady` once (R13)."""
-        with conversion.book.open("rb") as book:
-            self._storage.save(f"books/{book_id}/book.{conversion.format}", book)
-        if conversion.cover is not None:
-            with conversion.cover.open("rb") as cover:
-                self._storage.save(cover_key(book_id), cover)
-        return self._store.mark_ready(
-            book_id,
-            conversion.format,
-            conversion.title,
-            conversion.author,
-            conversion.cover is not None,
-            self._clock.now(),
-        )
 
     def _inspect(self, reader_id: uuid.UUID, received: ReceivedFile) -> None:
         try:
