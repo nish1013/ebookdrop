@@ -172,6 +172,14 @@ def add_library(
     def book_open_failed(reader: Reader, book_id: uuid.UUID) -> None:
         service.report_open_failure(reader.id, book_id)
 
+    @router.delete(
+        "/books/{book_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        responses={404: {"model": ErrorOut}},
+    )
+    def delete_book(reader: Reader, book_id: uuid.UUID) -> None:
+        service.delete(reader.id, book_id)
+
     @app.exception_handler(LibraryError)
     def refuse(_: Request, err: LibraryError) -> JSONResponse:
         code, reason = _ANSWERS[type(err)]

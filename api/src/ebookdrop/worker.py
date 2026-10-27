@@ -16,6 +16,7 @@ from ebookdrop.conversion.port import ConverterUnavailableError
 
 POLL_SECONDS = 1.0
 STUCK_CHECK_EVERY = timedelta(minutes=1)
+CLEANUP_EVERY = timedelta(days=1)
 
 _log = logging.getLogger(__name__)
 
@@ -46,17 +47,23 @@ class Worker:
         self._removals = removals
         self._clock = clock
         self._next_stuck_check: datetime | None = None
+        self._next_cleanup: datetime | None = None
 
     def tick(self) -> int:
-        """Run the stuck check (P2) when it is due, then one poll.
+        """Run the stuck check (P2) and the daily cleanup when due, then the polls.
 
-        Return how many jobs the poll took.
+        The daily cleanup is P5 and the staging sweep. Return how many jobs and
+        file removals (P4) the polls took.
         """
         now = self._clock.now()
         if self._next_stuck_check is None or now >= self._next_stuck_check:
             self._next_stuck_check = now + STUCK_CHECK_EVERY
             self._jobs.fail_stuck()
-        return self._jobs.poll()
+        if self._next_cleanup is None or now >= self._next_cleanup:
+            self._next_cleanup = now + CLEANUP_EVERY
+            self._removals.clean_failed()
+            self._removals.sweep_staging()
+        return self._removals.poll() + self._jobs.poll()
 
     def run_until(self, stop: threading.Event) -> None:
         """Tick until `stop` is set. A failed tick waits for the next one."""

@@ -34,6 +34,11 @@ export function LibraryPage() {
     return () => clearTimeout(timer);
   }, [processing, books, loadBooks]);
 
+  async function deleteBook(book: BookOut) {
+    await api.DELETE("/api/books/{book_id}", { params: { path: { book_id: book.id } } });
+    await loadBooks();
+  }
+
   async function signOut() {
     await api.DELETE("/api/sessions/current");
     navigate("/sign-in", { replace: true });
@@ -51,7 +56,7 @@ export function LibraryPage() {
       </header>
       <h1>Library</h1>
       <UploadForm onUploaded={loadBooks} />
-      <BookList books={books} />
+      <BookList books={books} onDelete={deleteBook} />
     </main>
   );
 }

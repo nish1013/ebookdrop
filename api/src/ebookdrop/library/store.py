@@ -17,6 +17,8 @@ from sqlalchemy import (
     Row,
     Table,
     Text,
+    delete,
+    exists,
     insert,
     literal,
     select,
@@ -88,6 +90,13 @@ _events = Table(
     Column("name", Text),
     Column("at", DateTime(timezone=True)),
 )
+_removals = Table(
+    "file_removals",
+    _metadata,
+    Column("book_id", UUID(as_uuid=True), primary_key=True),
+    Column("format", Text),
+    Column("queued_at", DateTime(timezone=True)),
+)
 
 
 @dataclass(frozen=True)
@@ -100,6 +109,14 @@ class NewUpload:
     sha256: str
     size: int
     at: datetime
+
+
+@dataclass(frozen=True)
+class WaitingRemoval:
+    """A deleted book whose files P4 must remove."""
+
+    book_id: uuid.UUID
+    format: BookFormat | None
 
 
 class LibraryStore:
@@ -337,6 +354,81 @@ class LibraryStore:
             for book_id in failed:
                 _record(connection, book_id, [BookEvent.CONVERSION_FAILED], at)
         return len(failed)
+
+    def delete_book(
+        self, reader_id: uuid.UUID, book_id: uuid.UUID, at: datetime
+    ) -> bool:
+        """Remove the reader's own book row. `False` when the reader has none.
+
+        One transaction lowers the bytes used, queues P4 and records
+        `BookDeleted`, or `BookDeletedDuringConversion` for a Processing book.
+        """
+        removed = (
+            delete(_books)
+            .where(_books.c.id == book_id, _books.c.reader_id == reader_id)
+            .returning(_books.c.status, _books.c.size, _books.c.format)
+        )
+        with self._engine.begin() as connection:
+            row = connection.execute(removed).first()
+            if row is None:
+                return False
+            connection.execute(
+                update(_libraries)
+                .where(_libraries.c.reader_id == reader_id)
+                .values(bytes_used=_libraries.c.bytes_used - row.size)
+            )
+            connection.execute(
+                insert(_removals),
+                {"book_id": book_id, "format": row.format, "queued_at": at},
+            )
+            name = (
+                BookEvent.BOOK_DELETED_DURING_CONVERSION
+                if row.status == BookStatus.PROCESSING
+                else BookEvent.BOOK_DELETED
+            )
+            _record(connection, book_id, [name], at)
+        return True
+
+    def waiting_removals(self, limit: int) -> list[WaitingRemoval]:
+        """Return the oldest deleted books whose files wait for P4."""
+        query = (
+            select(_removals.c.book_id, _removals.c.format)
+            .order_by(_removals.c.queued_at)
+            .limit(limit)
+        )
+        with self._engine.connect() as connection:
+            rows = connection.execute(query).all()
+        return [
+            WaitingRemoval(r.book_id, BookFormat(r.format) if r.format else None)
+            for r in rows
+        ]
+
+    def finish_removal(self, book_id: uuid.UUID, at: datetime) -> bool:
+        """Record `BookFilesRemoved` once and end the wait. `False` when done before."""
+        done = delete(_removals).where(_removals.c.book_id == book_id)
+        with self._engine.begin() as connection:
+            if connection.execute(done).rowcount != 1:
+                return False
+            _record(connection, book_id, [BookEvent.BOOK_FILES_REMOVED], at)
+        return True
+
+    def failed_to_clean(self, failed_before: datetime) -> list[uuid.UUID]:
+        """Return each Failed book that failed before `failed_before` and kept files."""
+        failed = select(_events.c.book_id).where(
+            _events.c.name == BookEvent.CONVERSION_FAILED,
+            _events.c.at < failed_before,
+        )
+        cleaned = exists().where(
+            _events.c.book_id == _books.c.id,
+            _events.c.name == BookEvent.FAILED_UPLOAD_CLEANED_UP,
+        )
+        query = select(_books.c.id).where(
+            _books.c.status == BookStatus.FAILED,
+            _books.c.id.in_(failed),
+            ~cleaned,
+        )
+        with self._engine.connect() as connection:
+            return list(connection.execute(query).scalars())
 
     def _book_by_file(self, reader_id: uuid.UUID, sha256: str) -> Book:
         query = select(_books).where(

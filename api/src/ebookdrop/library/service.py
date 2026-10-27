@@ -43,6 +43,14 @@ def cover_key(book_id: uuid.UUID) -> str:
     return f"books/{book_id}/cover.png"
 
 
+def stored_keys(book_id: uuid.UUID, book_format: BookFormat | None) -> list[str]:
+    """The storage keys of every file a book can have outside staging."""
+    keys = [original_key(book_id), cover_key(book_id)]
+    if book_format is not None:
+        keys.append(book_key(book_id, book_format))
+    return keys
+
+
 def staging_key(book_id: uuid.UUID, book_key: str) -> str:
     """The staging key of a converted file before `BookReady` (decision 23)."""
     return f"staging/{book_id}/{book_key.rsplit('/', 1)[-1]}"
@@ -130,6 +138,14 @@ class LibraryService:
         Raise `BookNotFoundError`.
         """
         if not self._store.record_open_failure(reader_id, book_id, self._clock.now()):
+            raise self._not_found(reader_id, book_id)
+
+    def delete(self, reader_id: uuid.UUID, book_id: uuid.UUID) -> None:
+        """`DeleteBook`: remove the reader's own book row, and queue P4 (R13).
+
+        Raise `BookNotFoundError`.
+        """
+        if not self._store.delete_book(reader_id, book_id, self._clock.now()):
             raise self._not_found(reader_id, book_id)
 
     def _not_found(self, reader_id: uuid.UUID, book_id: uuid.UUID) -> BookNotFoundError:
