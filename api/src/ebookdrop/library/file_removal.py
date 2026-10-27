@@ -30,7 +30,7 @@ class FileRemoval:
         done = 0
         for removal in self._store.waiting_removals(limit):
             try:
-                for key in stored_keys(removal.book_id, removal.format):
+                for key in stored_keys(removal.book_id):
                     self._storage.delete(key)
             except OSError:
                 _log.exception(
@@ -48,7 +48,7 @@ class FileRemoval:
         now = self._clock.now()
         failed = self._store.failed_to_clean(now - FAILED_KEEP)
         for book_id in failed:
-            for key in stored_keys(book_id, None):
+            for key in stored_keys(book_id):
                 self._storage.delete(key)
             self._store.record(book_id, [BookEvent.FAILED_UPLOAD_CLEANED_UP], now)
         return len(failed)

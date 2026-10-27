@@ -45,11 +45,14 @@ def cover_key(book_id: uuid.UUID) -> str:
     return f"books/{book_id}/cover.png"
 
 
-def stored_keys(book_id: uuid.UUID, book_format: BookFormat | None) -> list[str]:
-    """The storage keys of every file a book can have outside staging."""
+def stored_keys(book_id: uuid.UUID) -> list[str]:
+    """The storage keys of every file a book can have outside staging.
+
+    Both book keys are in the list: a crash after the move to the book key and
+    before the commit leaves a book file on a book with no format.
+    """
     keys = [original_key(book_id), cover_key(book_id)]
-    if book_format is not None:
-        keys.append(book_key(book_id, book_format))
+    keys.extend(book_key(book_id, book_format) for book_format in BookFormat)
     return keys
 
 
