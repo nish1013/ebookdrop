@@ -4,8 +4,9 @@ from fastapi.testclient import TestClient
 
 from ebookdrop.library.conversion_jobs import ConversionJobs
 from tests.api.conftest import sign_in, sign_up, upload
+from tests.samples import epub
 
-DUNE = b"PK\x03\x04dune"
+DUNE = epub()
 
 
 def test_library_lists_the_readers_own_books_only(

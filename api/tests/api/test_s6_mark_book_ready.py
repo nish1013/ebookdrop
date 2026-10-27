@@ -12,8 +12,9 @@ from ebookdrop.library.store import LibraryStore
 from ebookdrop.storage import LocalDiskStorage
 from tests.api.conftest import events, upload
 from tests.conftest import FakeClock
+from tests.samples import epub
 
-DUNE = b"PK\x03\x04dune"
+DUNE = epub()
 COVER = b"\x89PNG\r\n\x1a\ncover"
 
 

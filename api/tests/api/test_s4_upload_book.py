@@ -3,8 +3,9 @@ from sqlalchemy import Engine, text
 
 from ebookdrop.storage import LocalDiskStorage
 from tests.api.conftest import events, upload
+from tests.samples import epub
 
-DUNE = b"PK\x03\x04" + bytes(2 * 1024 * 1024 - 4)
+DUNE = epub(padding=2 * 1024 * 1024)
 
 
 def test_s4_ac1_upload_shows_the_file_as_processing(
