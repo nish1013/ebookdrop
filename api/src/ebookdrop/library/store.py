@@ -381,21 +381,7 @@ class LibraryStore:
                 .where(_libraries.c.reader_id == reader_id)
                 .values(bytes_used=_libraries.c.bytes_used - row.size)
             )
-            connection.execute(
-                insert(_removals),
-                {
-                    "book_id": book_id,
-                    "format": row.format,
-                    "queued_at": at,
-                    "next_try_at": at,
-                },
-            )
-            name = (
-                BookEvent.BOOK_DELETED_DURING_CONVERSION
-                if row.status == BookStatus.PROCESSING
-                else BookEvent.BOOK_DELETED
-            )
-            _record(connection, book_id, [name], at)
+            _queue_removal(connection, book_id, row.status, row.format, at)
         return True
 
     def waiting_removals(self, due_by: datetime, limit: int) -> list[WaitingRemoval]:
@@ -494,6 +480,30 @@ def _use_quota(connection: Connection, reader_id: uuid.UUID, size: int) -> bool:
 def _constraint(err: IntegrityError) -> str | None:
     diag = getattr(err.orig, "diag", None)
     return getattr(diag, "constraint_name", None)
+
+
+def _queue_removal(
+    connection: Connection,
+    book_id: uuid.UUID,
+    status: str,
+    book_format: str | None,
+    at: datetime,
+) -> None:
+    connection.execute(
+        insert(_removals),
+        {
+            "book_id": book_id,
+            "format": book_format,
+            "queued_at": at,
+            "next_try_at": at,
+        },
+    )
+    name = (
+        BookEvent.BOOK_DELETED_DURING_CONVERSION
+        if status == BookStatus.PROCESSING
+        else BookEvent.BOOK_DELETED
+    )
+    _record(connection, book_id, [name], at)
 
 
 def _record(
