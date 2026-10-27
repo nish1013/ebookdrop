@@ -8,6 +8,7 @@ from collections.abc import Callable, Sequence
 Runner = Callable[..., subprocess.CompletedProcess[bytes]]
 
 SANDBOX_IMAGE = "ebookdrop-sandbox"
+START_SECONDS = 30.0
 REMOVE_SECONDS = 10.0
 _log = logging.getLogger(__name__)
 
@@ -48,6 +49,27 @@ def sandbox_command(
         *options,
         image,
     ]
+
+
+class SandboxNotStartedError(Exception):
+    """The container did not start, so the file has no result."""
+
+
+def start(name: str, create: list[str], run: Runner = subprocess.run) -> None:
+    """Create the container `name` with `create`, then start it.
+
+    The started container blocks on stdin until an attach sends the file.
+    A start past `START_SECONDS` or a failed start removes the container.
+    """
+    for command in (create, [docker(), "start", name]):
+        try:
+            done = run(command, capture_output=True, timeout=START_SECONDS, check=False)
+        except (subprocess.TimeoutExpired, OSError) as err:
+            remove(name, run)
+            raise SandboxNotStartedError("docker did not start") from err
+        if done.returncode != 0:
+            remove(name, run)
+            raise SandboxNotStartedError(f"docker exit {done.returncode}")
 
 
 def docker() -> str:
