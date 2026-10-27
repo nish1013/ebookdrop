@@ -1,4 +1,4 @@
-"""The worker process: the conversion outbox (P1), the stuck check (P2), P4 and P5."""
+"""The worker process: the conversion outbox (P1), the stuck check (P2), P4 to P6."""
 
 import logging
 import os
@@ -10,7 +10,12 @@ from typing import Protocol
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from ebookdrop.app import conversion_jobs, file_removal, storage_from_env
+from ebookdrop.app import (
+    conversion_jobs,
+    file_removal,
+    library_removal,
+    storage_from_env,
+)
 from ebookdrop.clock import Clock, SystemClock
 from ebookdrop.conversion.docker import DockerConverter
 from ebookdrop.conversion.port import ConverterUnavailableError
@@ -40,12 +45,21 @@ class Removals(Protocol):
     def sweep_staging(self) -> int: ...
 
 
+class Libraries(Protocol):
+    """The library removal step (P6) the worker runs."""
+
+    def poll(self) -> int: ...
+
+
 class Worker:
     """Runs the library steps in one process."""
 
-    def __init__(self, jobs: Jobs, removals: Removals, clock: Clock) -> None:
+    def __init__(
+        self, jobs: Jobs, removals: Removals, libraries: Libraries, clock: Clock
+    ) -> None:
         self._jobs = jobs
         self._removals = removals
+        self._libraries = libraries
         self._clock = clock
         self._next_stuck_check: datetime | None = None
         self._next_cleanup: datetime | None = None
@@ -87,7 +101,8 @@ def main() -> None:
     storage = storage_from_env()
     jobs = conversion_jobs(engine, clock, storage, DockerConverter())
     removals = file_removal(engine, clock, storage)
-    Worker(jobs, removals, clock).run_until(threading.Event())
+    libraries = library_removal(engine, clock)
+    Worker(jobs, removals, libraries, clock).run_until(threading.Event())
 
 
 def _guarded(step: Callable[[], int]) -> None:

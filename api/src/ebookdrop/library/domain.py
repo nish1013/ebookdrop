@@ -119,6 +119,10 @@ class BookNotFoundError(LibraryError):
     """No book with this id belongs to the reader (decision 16)."""
 
 
+class ReaderGoneError(LibraryError):
+    """The reader's account was deleted while the request ran."""
+
+
 @dataclass(frozen=True)
 class FileName:
     """The last part of an uploaded file name, without outer spaces."""

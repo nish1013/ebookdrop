@@ -18,6 +18,7 @@ from ebookdrop.inspection.port import InspectorPort
 from ebookdrop.library.conversion_jobs import ConversionJobs
 from ebookdrop.library.file_removal import FileRemoval
 from ebookdrop.library.http import add_library
+from ebookdrop.library.library_removal import LibraryRemoval
 from ebookdrop.library.service import LibraryService
 from ebookdrop.library.store import LibraryStore
 from ebookdrop.storage import LocalDiskStorage, StoragePort
@@ -46,6 +47,11 @@ def conversion_jobs(
 def file_removal(engine: Engine, clock: Clock, storage: StoragePort) -> FileRemoval:
     """Build P4, P5 and the staging sweep on the same parts as the API."""
     return FileRemoval(LibraryStore(engine), storage, clock)
+
+
+def library_removal(engine: Engine, clock: Clock) -> LibraryRemoval:
+    """Build P6 on the same parts as the API."""
+    return LibraryRemoval(LibraryStore(engine), clock)
 
 
 def storage_from_env() -> StoragePort:
