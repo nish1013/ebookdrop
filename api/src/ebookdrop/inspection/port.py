@@ -44,4 +44,13 @@ class InspectorPort(Protocol):
 
 def read_verdict(word: str) -> BookFormat:
     """Turn the sandbox output into a format. Raise on a refusal or an unknown word."""
-    raise NotImplementedError
+    word = word.strip()
+    if word in _FORMATS:
+        return BookFormat(word)
+    if word in _REFUSALS:
+        raise FileRefusedError(Refusal(word))
+    raise InspectorUnavailableError("unknown verdict")
+
+
+_FORMATS = {f.value for f in BookFormat}
+_REFUSALS = {r.value for r in Refusal}

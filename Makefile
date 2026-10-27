@@ -1,4 +1,4 @@
-.PHONY: install test test-api test-web lint api-types
+.PHONY: install test test-api test-web lint api-types sandbox-image
 
 install:
 	cd api && uv sync
@@ -9,7 +9,7 @@ test: test-api test-web
 test-api:
 	cd api && uv run pytest -q
 
-test-web:
+test-web: sandbox-image
 	cd web && npx playwright test
 
 lint: api-types
@@ -20,3 +20,6 @@ lint: api-types
 api-types:
 	cd api && uv run python scripts/openapi.py > openapi.json
 	cd web && npm run -s api-types
+
+sandbox-image:
+	docker build -q -t ebookdrop-inspect -f api/sandbox/Dockerfile api

@@ -12,6 +12,7 @@ from ebookdrop.library.store import LibraryStore
 from ebookdrop.storage import LocalDiskStorage
 from tests.api.conftest import events, upload
 from tests.conftest import FakeClock
+from tests.fakes import InProcessInspector
 from tests.samples import epub
 
 DUNE = epub()
@@ -68,7 +69,7 @@ def test_s6_ac2_p3_again_for_one_conversion_gives_no_second_book_ready(
     work_dir.mkdir()
     (work_dir / "original").write_bytes(DUNE)
     again = DuneConverter().convert(work_dir / "original", work_dir)
-    library = LibraryService(LibraryStore(engine), storage, clock)
+    library = LibraryService(LibraryStore(engine), storage, clock, InProcessInspector())
 
     assert library.mark_ready(uuid.UUID(str(book["id"])), again) is False
 

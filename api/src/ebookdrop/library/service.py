@@ -5,8 +5,23 @@ from typing import BinaryIO
 
 from ebookdrop.clock import Clock
 from ebookdrop.conversion.port import Conversion
-from ebookdrop.library.domain import Book, BookNotFoundError, FileName
-from ebookdrop.library.store import LibraryStore
+from ebookdrop.inspection.port import (
+    FileRefusedError,
+    InspectorPort,
+    InspectorUnavailableError,
+)
+from ebookdrop.library.domain import (
+    Book,
+    BookNotFoundError,
+    DuplicateUploadError,
+    FileName,
+    InspectUnavailableError,
+    IntakeEvent,
+    ReceivedFile,
+    RejectReason,
+    UploadRejectedError,
+)
+from ebookdrop.library.store import LibraryStore, NewUpload
 from ebookdrop.storage import StoragePort
 
 
@@ -21,21 +36,67 @@ def cover_key(book_id: uuid.UUID) -> str:
 
 
 class LibraryService:
-    """Runs the library commands on one store, one storage and one clock."""
+    """Runs the library commands on one store, storage, inspector and clock."""
 
-    def __init__(self, store: LibraryStore, storage: StoragePort, clock: Clock) -> None:
+    def __init__(
+        self,
+        store: LibraryStore,
+        storage: StoragePort,
+        clock: Clock,
+        inspector: InspectorPort,
+    ) -> None:
         self._store = store
         self._storage = storage
         self._clock = clock
+        self._inspector = inspector
 
-    def upload(
-        self, reader_id: uuid.UUID, raw_name: str | None, source: BinaryIO
-    ) -> Book:
-        """Store the file, then record `UploadReceived` with its conversion job (R5)."""
-        name = FileName.parse(raw_name)
+    def upload(self, reader_id: uuid.UUID, received: ReceivedFile) -> Book:
+        """Inspect a fully received file, then add it as a book (R5, R6, R10).
+
+        Raise `UploadRejectedError`, `DuplicateUploadError` or
+        `InspectUnavailableError`. Each reject is recorded.
+        """
+        name = FileName.parse(received.raw_name)
+        self._inspect(reader_id, received)
         book_id = uuid.uuid4()
-        self._storage.save(original_key(book_id), source)
-        return self._store.add_upload(book_id, reader_id, name, self._clock.now())
+        upload = NewUpload(
+            book_id,
+            reader_id,
+            name,
+            received.sha256,
+            received.size,
+            self._clock.now(),
+        )
+
+        def save() -> None:
+            with received.path.open("rb") as source:
+                self._storage.save(original_key(book_id), source)
+
+        try:
+            return self._store.add_upload(upload, save)
+        except UploadRejectedError as rejected:
+            raise self.reject(reader_id, rejected.reason) from None
+        except DuplicateUploadError:
+            self._store.record_intake(
+                reader_id,
+                IntakeEvent.DUPLICATE_UPLOAD_DETECTED,
+                None,
+                self._clock.now(),
+            )
+            raise
+
+    def reject(self, reader_id: uuid.UUID, reason: RejectReason) -> UploadRejectedError:
+        """Record `UploadRejected(reason)` and return the error to raise."""
+        self._store.record_intake(
+            reader_id, IntakeEvent.UPLOAD_REJECTED, reason, self._clock.now()
+        )
+        return UploadRejectedError(reason)
+
+    def abandon(self, reader_id: uuid.UUID) -> None:
+        """Record `UploadAbandoned`: the transfer stopped before the last byte."""
+        self._store.record_intake(
+            reader_id, IntakeEvent.UPLOAD_ABANDONED, None, self._clock.now()
+        )
 
     def books(self, reader_id: uuid.UUID) -> list[Book]:
         """Return the reader's books, newest first."""
@@ -62,3 +123,11 @@ class LibraryService:
             conversion.cover is not None,
             self._clock.now(),
         )
+
+    def _inspect(self, reader_id: uuid.UUID, received: ReceivedFile) -> None:
+        try:
+            self._inspector.inspect(received.path)
+        except FileRefusedError as refused:
+            raise self.reject(reader_id, RejectReason(refused.refusal)) from None
+        except InspectorUnavailableError as err:
+            raise InspectUnavailableError from err

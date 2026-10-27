@@ -30,7 +30,7 @@ def create_app(
     app.add_exception_handler(RequestValidationError, _refuse_body)
     identity = IdentityService(IdentityStore(engine), clock)
     add_identity(app, identity)
-    library = LibraryService(LibraryStore(engine), storage, clock)
+    library = LibraryService(LibraryStore(engine), storage, clock, inspector)
     add_library(app, library, signed_in_reader(identity))
     return app
 
@@ -40,7 +40,7 @@ def conversion_jobs(
 ) -> ConversionJobs:
     """Build the P1 poller on the same parts as the API."""
     store = LibraryStore(engine)
-    library = LibraryService(store, storage, clock)
+    library = LibraryService(store, storage, clock, DockerInspector())
     return ConversionJobs(store, storage, converter, library, clock)
 
 

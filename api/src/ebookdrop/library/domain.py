@@ -77,6 +77,10 @@ class DuplicateUploadError(LibraryError):
         self.book = book
 
 
+class UploadAbandonedError(LibraryError):
+    """The transfer stopped before the last byte (event 4)."""
+
+
 class InspectUnavailableError(LibraryError):
     """The sandbox could not inspect the file. The reader can try again."""
 
