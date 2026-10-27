@@ -82,3 +82,17 @@ def test_failures_count_with_the_same_email_key_as_the_unique_index(
         )
         == 1
     )
+
+
+def test_a_new_failure_removes_failures_older_than_the_window(engine: Engine) -> None:
+    store = IdentityStore(engine)
+    ana = Email.parse("ana@example.com")
+    store.record_failure(ana, NOW - timedelta(hours=2))
+
+    store.record_failure(ana, NOW)
+
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text("SELECT count(*) FROM sign_in_failures")
+        ).scalar()
+    assert rows == 1
