@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from alembic import command
@@ -9,6 +10,7 @@ from sqlalchemy import Engine, MetaData, create_engine, text
 from testcontainers.community.postgres import PostgresContainer
 
 from ebookdrop.app import create_app
+from ebookdrop.storage import LocalDiskStorage
 
 
 class FakeClock:
@@ -51,6 +53,14 @@ def clock() -> FakeClock:
 
 
 @pytest.fixture
-def client(engine: Engine, clock: FakeClock) -> Iterator[TestClient]:
-    with TestClient(create_app(engine, clock), base_url="https://testserver") as client:
+def storage(tmp_path: Path) -> LocalDiskStorage:
+    return LocalDiskStorage(tmp_path / "storage")
+
+
+@pytest.fixture
+def client(
+    engine: Engine, clock: FakeClock, storage: LocalDiskStorage
+) -> Iterator[TestClient]:
+    app = create_app(engine, clock, storage)
+    with TestClient(app, base_url="https://testserver") as client:
         yield client

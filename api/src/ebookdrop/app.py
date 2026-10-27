@@ -1,6 +1,7 @@
 """The web application and its wiring."""
 
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -8,22 +9,42 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import Engine, create_engine
 
 from ebookdrop.clock import Clock, SystemClock
+from ebookdrop.conversion.port import ConverterPort
 from ebookdrop.identity.http import add_identity
 from ebookdrop.identity.service import IdentityService
 from ebookdrop.identity.store import IdentityStore
+from ebookdrop.library.conversion_jobs import ConversionJobs
+from ebookdrop.library.service import LibraryService
+from ebookdrop.library.store import LibraryStore
+from ebookdrop.storage import LocalDiskStorage, StoragePort
 
 
-def create_app(engine: Engine, clock: Clock) -> FastAPI:
-    """Build the API on one database and one clock."""
+def create_app(engine: Engine, clock: Clock, storage: StoragePort) -> FastAPI:
+    """Build the API on one database, one clock and one storage."""
     app = FastAPI(title="ebookdrop")
     app.add_exception_handler(RequestValidationError, _refuse_body)
     add_identity(app, IdentityService(IdentityStore(engine), clock))
     return app
 
 
+def conversion_jobs(
+    engine: Engine, clock: Clock, storage: StoragePort, converter: ConverterPort
+) -> ConversionJobs:
+    """Build the P1 poller on the same parts as the API."""
+    store = LibraryStore(engine)
+    library = LibraryService(store, storage, clock)
+    return ConversionJobs(store, storage, converter, library, clock)
+
+
+def storage_from_env() -> StoragePort:
+    """Build the storage from `STORAGE_DIR`."""
+    return LocalDiskStorage(Path(os.environ["STORAGE_DIR"]))
+
+
 def app_from_env() -> FastAPI:
-    """Build the API from `DATABASE_URL`, for uvicorn `--factory`."""
-    return create_app(create_engine(os.environ["DATABASE_URL"]), SystemClock())
+    """Build the API from `DATABASE_URL` and `STORAGE_DIR`, for uvicorn `--factory`."""
+    engine = create_engine(os.environ["DATABASE_URL"])
+    return create_app(engine, SystemClock(), storage_from_env())
 
 
 async def _refuse_body(_: Request, __: Exception) -> JSONResponse:
