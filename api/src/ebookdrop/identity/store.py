@@ -21,7 +21,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.exc import IntegrityError
 
-from ebookdrop.identity.domain import Email, EmailTakenError
+from ebookdrop.identity.domain import SIGN_IN_FAILURE_WINDOW, Email, EmailTakenError
 
 EMAIL_KEY_INDEX = "accounts_email_key"
 
@@ -119,11 +119,16 @@ class IdentityStore:
             )
 
     def record_failure(self, email: Email, at: datetime) -> None:
-        """Store one failed sign-in for the email key."""
+        """Store one failed sign-in, and remove the key's failures past the window."""
+        key = _email_key(email)
         with self._engine.begin() as connection:
             connection.execute(
-                insert(_failures).values(email_key=_email_key(email), at=at)
+                delete(_failures).where(
+                    _failures.c.email_key == key,
+                    _failures.c.at <= at - SIGN_IN_FAILURE_WINDOW,
+                )
             )
+            connection.execute(insert(_failures).values(email_key=key, at=at))
 
     def count_failures(self, email: Email, since: datetime) -> int:
         """Count failed sign-ins for the email key after `since`."""
