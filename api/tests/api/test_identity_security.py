@@ -40,7 +40,12 @@ def test_password_is_stored_as_argon2id_hash(
 
 
 def test_password_under_12_characters_is_rejected(client: TestClient) -> None:
-    assert sign_up(client, "ana@example.com", "eleven char") == 422
+    response = client.post(
+        "/api/accounts", json={"email": "ana@example.com", "password": "eleven char"}
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"code": "invalid_request"}
 
 
 def test_email_with_no_domain_is_rejected(client: TestClient) -> None:
