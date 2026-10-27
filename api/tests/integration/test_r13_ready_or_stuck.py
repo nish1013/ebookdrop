@@ -14,13 +14,22 @@ TEN = datetime(2026, 10, 27, 10, 0, tzinfo=UTC)
 
 
 def _processing_book(
-    store: LibraryStore, reader_id: uuid.UUID | None = None
+    engine: Engine, store: LibraryStore, reader_id: uuid.UUID | None = None
 ) -> uuid.UUID:
     book_id = uuid.uuid4()
+    reader_id = reader_id or uuid.uuid4()
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO accounts (id, email, password_hash)"
+                " VALUES (:id, :email, 'h')"
+            ),
+            {"id": reader_id, "email": f"{reader_id}@example.com"},
+        )
     store.add_upload(
         NewUpload(
             book_id,
-            reader_id or uuid.uuid4(),
+            reader_id,
             FileName("dune.epub"),
             hashlib.sha256(book_id.bytes).hexdigest(),
             100,
@@ -52,7 +61,7 @@ def _status(engine: Engine, book_id: uuid.UUID) -> str:
 
 def test_r13_p2_that_waits_on_p3_leaves_the_ready_book_ready(engine: Engine) -> None:
     store = LibraryStore(engine)
-    book_id = _processing_book(store)
+    book_id = _processing_book(engine, store)
     stuck: list[int] = []
     p2 = threading.Thread(
         target=lambda: stuck.append(store.fail_stuck(TEN, TEN + timedelta(minutes=5)))
@@ -81,7 +90,7 @@ def test_r13_delete_that_waits_on_p3_queues_the_ready_book_files(
 ) -> None:
     store = LibraryStore(engine)
     reader_id = uuid.uuid4()
-    book_id = _processing_book(store, reader_id)
+    book_id = _processing_book(engine, store, reader_id)
     deleted: list[bool] = []
     delete = threading.Thread(
         target=lambda: deleted.append(
