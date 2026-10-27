@@ -18,6 +18,7 @@ from sqlalchemy import (
     Table,
     Text,
     insert,
+    literal,
     select,
     update,
 )
@@ -177,6 +178,51 @@ class LibraryStore:
         )
         with self._engine.connect() as connection:
             return bool(connection.execute(query).scalar())
+
+    def ready_format(
+        self, reader_id: uuid.UUID, book_id: uuid.UUID
+    ) -> BookFormat | None:
+        """Return the format of the reader's own Ready book, else `None`."""
+        query = select(_books.c.format).where(
+            _books.c.id == book_id,
+            _books.c.reader_id == reader_id,
+            _books.c.status == BookStatus.READY,
+        )
+        with self._engine.connect() as connection:
+            found = connection.execute(query).scalar()
+        return BookFormat(found) if found else None
+
+    def record_open_failure(
+        self, reader_id: uuid.UUID, book_id: uuid.UUID, at: datetime
+    ) -> bool:
+        """Record `BookOpenFailed` on the reader's own Ready book. `False` when not.
+
+        The status stays Ready (decision 15).
+        """
+        ready = select(
+            _books.c.id, literal(BookEvent.BOOK_OPEN_FAILED.value), literal(at)
+        ).where(
+            _books.c.id == book_id,
+            _books.c.reader_id == reader_id,
+            _books.c.status == BookStatus.READY,
+        )
+        recorded = (
+            insert(_events)
+            .from_select(["book_id", "name", "at"], ready)
+            .returning(_events.c.book_id)
+        )
+        with self._engine.begin() as connection:
+            return connection.execute(recorded).first() is not None
+
+    def owner(self, book_id: uuid.UUID) -> uuid.UUID | None:
+        """Return the reader who owns the book, for the access log only.
+
+        This is the one read with no owner filter. No answer may depend on it.
+        """
+        query = select(_books.c.reader_id).where(_books.c.id == book_id)
+        with self._engine.connect() as connection:
+            found: uuid.UUID | None = connection.execute(query).scalar()
+        return found
 
     def waiting_jobs(self, limit: int) -> list[uuid.UUID]:
         """Return the oldest jobs that no run has started."""

@@ -2,17 +2,17 @@
 
 import tempfile
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, BinaryIO
 
 from fastapi import APIRouter, Depends, FastAPI, Request, status
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from starlette.requests import ClientDisconnect
 
-from ebookdrop.conversion.port import Failure
+from ebookdrop.conversion.port import BookFormat, Failure
 from ebookdrop.identity.domain import SignedInReader
 from ebookdrop.identity.http import ErrorOut
 from ebookdrop.library.domain import (
@@ -44,6 +44,16 @@ _ANSWERS: dict[type[LibraryError], tuple[int, str]] = {
     ),
     BookNotFoundError: (status.HTTP_404_NOT_FOUND, "book_not_found"),
 }
+_MEDIA_TYPES = {
+    BookFormat.EPUB: "application/epub+zip",
+    BookFormat.PDF: "application/pdf",
+}
+_BOOK_HEADERS = {
+    "Content-Security-Policy": "default-src 'none'; script-src 'none'; sandbox",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "private, no-store",
+}
+_CHUNK = 64 * 1024
 _FILE_BODY = {
     "requestBody": {
         "required": True,
@@ -138,6 +148,30 @@ def add_library(
                 headers={"X-Content-Type-Options": "nosniff"},
             )
 
+    @router.get(
+        "/books/{book_id}/content",
+        response_class=Response,
+        responses={
+            200: {"content": {media: {} for media in _MEDIA_TYPES.values()}},
+            404: {"model": ErrorOut},
+        },
+    )
+    def book_content(reader: Reader, book_id: uuid.UUID) -> Response:
+        book_format, content = service.content(reader.id, book_id)
+        return StreamingResponse(
+            _chunks(content),
+            media_type=_MEDIA_TYPES[book_format],
+            headers=_BOOK_HEADERS,
+        )
+
+    @router.post(
+        "/books/{book_id}/open-failures",
+        status_code=status.HTTP_204_NO_CONTENT,
+        responses={404: {"model": ErrorOut}},
+    )
+    def book_open_failed(reader: Reader, book_id: uuid.UUID) -> None:
+        service.report_open_failure(reader.id, book_id)
+
     @app.exception_handler(LibraryError)
     def refuse(_: Request, err: LibraryError) -> JSONResponse:
         code, reason = _ANSWERS[type(err)]
@@ -163,6 +197,12 @@ def add_library(
         )
 
     app.include_router(router)
+
+
+def _chunks(content: BinaryIO) -> Iterator[bytes]:
+    with content:
+        while chunk := content.read(_CHUNK):
+            yield chunk
 
 
 def _out(book: Book) -> BookOut:
