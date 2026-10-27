@@ -1,10 +1,15 @@
 """One locked-down Docker container per untrusted file."""
 
+import logging
 import shutil
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+
+Runner = Callable[..., subprocess.CompletedProcess[bytes]]
 
 SANDBOX_IMAGE = "ebookdrop-sandbox"
+REMOVE_SECONDS = 10.0
+_log = logging.getLogger(__name__)
 
 
 def sandbox_command(
@@ -50,8 +55,17 @@ def docker() -> str:
     return shutil.which("docker") or "docker"
 
 
-def remove(name: str) -> None:
-    """Remove the container `name`, also when it still runs."""
-    subprocess.run(  # noqa: S603
-        [docker(), "rm", "-f", name], capture_output=True, check=False
-    )
+def remove(name: str, run: Runner = subprocess.run) -> None:
+    """Remove the container `name`, also when it still runs.
+
+    A remove that hangs or fails only logs, so the result of the job stands.
+    """
+    try:
+        run(
+            [docker(), "rm", "-f", name],
+            capture_output=True,
+            timeout=REMOVE_SECONDS,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        _log.warning("container %s was not removed", name)

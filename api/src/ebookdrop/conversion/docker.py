@@ -23,7 +23,7 @@ from ebookdrop.conversion.sandbox_convert import (
     MAX_BYTES,
     UNREADABLE_EXIT,
 )
-from ebookdrop.sandbox import SANDBOX_IMAGE, remove, sandbox_command
+from ebookdrop.sandbox import SANDBOX_IMAGE, Runner, docker, sandbox_command
 
 NAME_PREFIX = "ebookdrop-convert-"
 SECCOMP_PROFILE = Path(__file__).with_name("seccomp.json")
@@ -73,10 +73,14 @@ class DockerConverter:
     """Runs `sandbox_convert` in a container with no network and tight limits."""
 
     def __init__(
-        self, image: str = SANDBOX_IMAGE, timeout: float = CONVERT_SECONDS
+        self,
+        image: str = SANDBOX_IMAGE,
+        timeout: float = CONVERT_SECONDS,
+        run: Runner = subprocess.run,
     ) -> None:
         self._image = image
         self._timeout = timeout
+        self._run = run
 
     def convert(self, source: Path, work_dir: Path) -> Conversion:
         """Pipe `source` to a new container and unpack its output.
@@ -88,7 +92,7 @@ class DockerConverter:
         output = work_dir / "sandbox.tar"
         try:
             with source.open("rb") as stdin, output.open("wb") as stdout:
-                done = subprocess.run(  # noqa: S603
+                done = self._run(
                     convert_command(name, self._image),
                     stdin=stdin,
                     stdout=stdout,
@@ -97,7 +101,7 @@ class DockerConverter:
                     check=False,
                 )
         except subprocess.TimeoutExpired:
-            remove(name)
+            _remove(name)
             raise ConversionFailedError(Failure.TIMED_OUT) from None
         except OSError as err:
             raise ConverterUnavailableError("docker did not start") from err
@@ -108,6 +112,12 @@ class DockerConverter:
             raise ConversionFailedError(Failure.CRASHED) from err
         finally:
             output.unlink(missing_ok=True)
+
+
+def _remove(name: str) -> None:
+    subprocess.run(  # noqa: S603
+        [docker(), "rm", "-f", name], capture_output=True, check=False
+    )
 
 
 def _check_exit(code: int) -> None:
