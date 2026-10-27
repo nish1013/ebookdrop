@@ -1,6 +1,6 @@
 # Plan
 
-Status: draft
+Status: locked, 2026-10-27
 
 Scope: release 1 of the brief, plus delete (decision 9). Model: [deciders.md](deciders.md).
 Criteria: [commands.md](commands.md).
