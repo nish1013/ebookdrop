@@ -4,11 +4,9 @@ import logging
 
 from ebookdrop.clock import Clock
 from ebookdrop.library.domain import FAILED_KEEP, STAGING_KEEP, BookEvent
-from ebookdrop.library.service import stored_keys
+from ebookdrop.library.service import STAGING, stored_keys
 from ebookdrop.library.store import LibraryStore
 from ebookdrop.storage import StoragePort
-
-STAGING = "staging"
 
 _log = logging.getLogger(__name__)
 

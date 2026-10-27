@@ -25,6 +25,8 @@ from ebookdrop.library.domain import (
 from ebookdrop.library.store import LibraryStore, NewUpload
 from ebookdrop.storage import StoragePort
 
+STAGING = "staging"
+
 _log = logging.getLogger(__name__)
 
 
@@ -53,7 +55,7 @@ def stored_keys(book_id: uuid.UUID, book_format: BookFormat | None) -> list[str]
 
 def staging_key(book_id: uuid.UUID, book_key: str) -> str:
     """The staging key of a converted file before `BookReady` (decision 23)."""
-    return f"staging/{book_id}/{book_key.rsplit('/', 1)[-1]}"
+    return f"{STAGING}/{book_id}/{book_key.rsplit('/', 1)[-1]}"
 
 
 class LibraryService:
