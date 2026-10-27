@@ -20,15 +20,16 @@ Runner = Callable[..., subprocess.CompletedProcess[bytes]]
 
 INSPECT_IMAGE = "ebookdrop-inspect"
 NAME_PREFIX = "ebookdrop-inspect-"
+START_SECONDS = 30.0
 # 137 is a kill by the memory limit. The docker client itself exits 1 or 125-127.
 _DAMAGED_EXITS = {CRASH_EXIT, 137}
 
 
 def sandbox_command(name: str, image: str) -> list[str]:
-    """The `docker run` line of one inspect container, ending with the image."""
+    """The `docker create` line of one inspect container, ending with the image."""
     return [
         _docker(),
-        "run",
+        "create",
         "--rm",
         "-i",
         "--pull",
@@ -70,15 +71,18 @@ class DockerInspector:
         self._run = run
 
     def inspect(self, source: Path) -> BookFormat:
-        """Pipe `source` to a new container and read its verdict.
+        """Start a new container, pipe `source` to it and read its verdict.
 
-        A run past the time limit refuses the file as damaged (a zip bomb).
+        The time limit starts when the container runs. A run past it refuses
+        the file as damaged (a zip bomb). A container that does not start
+        gives no verdict.
         """
         name = f"{NAME_PREFIX}{uuid.uuid4().hex}"
+        self._start(name)
         try:
             with source.open("rb") as stdin:
                 done = self._run(
-                    sandbox_command(name, self._image),
+                    [_docker(), "attach", name],
                     stdin=stdin,
                     capture_output=True,
                     timeout=self._timeout,
@@ -88,12 +92,27 @@ class DockerInspector:
             self._remove(name)
             raise FileRefusedError(Refusal.DAMAGED) from None
         except OSError as err:
-            raise InspectorUnavailableError("docker did not start") from err
+            self._remove(name)
+            raise InspectorUnavailableError("docker did not attach") from err
         if done.returncode in _DAMAGED_EXITS:
             raise FileRefusedError(Refusal.DAMAGED)
         if done.returncode != 0:
             raise InspectorUnavailableError(f"docker exit {done.returncode}")
         return read_verdict(done.stdout.decode(errors="replace"))
+
+    def _start(self, name: str) -> None:
+        # The started container blocks on stdin until the attach sends the file.
+        for command in (sandbox_command(name, self._image), [_docker(), "start", name]):
+            try:
+                done = self._run(
+                    command, capture_output=True, timeout=START_SECONDS, check=False
+                )
+            except (subprocess.TimeoutExpired, OSError) as err:
+                self._remove(name)
+                raise InspectorUnavailableError("docker did not start") from err
+            if done.returncode != 0:
+                self._remove(name)
+                raise InspectorUnavailableError(f"docker exit {done.returncode}")
 
     def _remove(self, name: str) -> None:
         self._run([_docker(), "rm", "-f", name], capture_output=True, check=False)

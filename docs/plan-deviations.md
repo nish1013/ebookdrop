@@ -35,7 +35,7 @@ only once it is added to [decisions.md](decisions.md).
 **In short:** A file that runs the sandbox out of time or memory counts as damaged.
 
 - **Plan:** Decision 19 lists the reasons and the 10 s limit. The endpoint table has no answer for a stopped transfer or a sandbox that does not start.
-- **Built:** A time-out or a memory kill gives `damaged` and removes the container. A Docker failure answers 503 `inspect_unavailable`, and a stopped transfer answers 400 `upload_abandoned`.
+- **Built:** A time-out or a memory kill gives `damaged` and removes the container, with the 10 s clock from the container start. A Docker failure or a start past 30 s answers 503 `inspect_unavailable`, and a stopped transfer answers 400 `upload_abandoned`.
 - **Why:** The reason list has no time-out word, and a zip bomb is a damaged file. An outage must not reject a good file. The file goes to the container on stdin, so no host folder is mounted.
 - **Undo:** Add a reason word for the time-out, and map it in `DockerInspector`.
 

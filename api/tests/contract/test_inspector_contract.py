@@ -97,7 +97,8 @@ def test_sandbox_has_no_network_a_read_only_root_and_its_limits(image: str) -> N
     command = sandbox_command("ebookdrop-inspect-probe", image)
     assert command[command.index("--pull") + 1] == "never"
     at = command.index(image)
-    probe = [*command[:at], "--entrypoint", "python", image, "-c", PROBE]
+    probe = ["docker", "run", *command[2:at], "--entrypoint", "python"]
+    probe += [image, "-c", PROBE]
 
     done = subprocess.run(
         probe, input="", capture_output=True, text=True, timeout=60, check=True
