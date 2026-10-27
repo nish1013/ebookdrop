@@ -163,6 +163,13 @@ class IdentityStore:
             )
             connection.execute(insert(_failures).values(email_key=key, at=at))
 
+    def remove_failures_before(self, before: datetime) -> int:
+        """Remove the failed sign-ins of every key at or before `before`."""
+        with self._engine.begin() as connection:
+            return connection.execute(
+                delete(_failures).where(_failures.c.at <= before)
+            ).rowcount
+
     def count_failures(self, email: Email, since: datetime) -> int:
         """Count failed sign-ins for the email key after `since`."""
         query = select(func.count()).where(

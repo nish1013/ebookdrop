@@ -74,7 +74,9 @@ class IdentityService:
 
     def forget_old_failures(self) -> int:
         """Remove every failed sign-in past the window. Return how many."""
-        return 0
+        return self._store.remove_failures_before(
+            self._clock.now() - SIGN_IN_FAILURE_WINDOW
+        )
 
     def signed_in(self, token: str) -> SignedInReader | None:
         """Return the reader of the token's live session, or `None`."""
