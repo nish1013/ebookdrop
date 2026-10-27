@@ -86,3 +86,43 @@ Step ⑤ picks a strategy for each policy.
 | R6 | A double click on Upload | Unique (reader_id, sha256) | S4 AC6, twice in parallel |
 | R10 | Two 30 MB uploads at 980 MB | Conditional update on `bytes_used` | S4 AC10 |
 | R13 | `MarkBookReady`, `FailStuckConversion` and `DeleteBook` on one book | Conditional update on `status` | S6 AC4, S7 AC2 |
+
+## Contexts
+
+Step ⑤. The deciders confirm two contexts. Conversion is a tool behind a port.
+
+```
++---------------------+   who is signed in (ask)   +-------------------------------+
+| Identity            |<---------------------------| Library                       |
+| Account(reader)     |                            | Library(reader)               |
+| SignUp SignIn       |--- P6 AccountDeleted ----->| UploadBook MarkBookReady      |
+| SignOut DeleteAccount|                           | FailStuckConversion DeleteBook|
++---------------------+                            | read models: list, reader view,|
+                                                   | metric report                  |
+                                                   +-------------------------------+
+                                                     │ P1 ConvertBook    ▲ P3 MarkBookReady
+                                                     ▼                   │
+                                                   [ ConverterPort ] -> sandbox tool
+                                                     │ P4 P5
+                                                     ▼
+                                                   [ StoragePort ] -> file store
+```
+
+| Draft | Confirmed | Why |
+|---|---|---|
+| Identity | Identity | `Account(reader)` owns R1 and sign-in. |
+| Library | Library | `Library(reader)` owns R6, R10, R13. It owns the book status (Q14). |
+| Conversion context | A tool behind `ConverterPort` | No decider. Its one rule is an idempotency key. |
+| Reading context | A read model in Library | `OpenBook` reads. It decides nothing. |
+| Metrics | A read model in Library | `BookReadyLate` is derived from events 7 and 16. |
+
+## Policy strategies
+
+| P | Strategy | Why |
+|---|---|---|
+| P1 | Outbox row in the `UploadReceived` transaction, polled by the same service | One service, one database. A crash after the commit loses nothing (Q11). |
+| P2 | Cron every minute: Processing books older than the deadline | Lag of one minute is fine. It also catches a crash after conversion. |
+| P3 | In-process: the conversion job calls `MarkBookReady` when the tool returns | Same service. A crash before the call is caught by P2. |
+| P4 | Outbox row in the delete transaction, polled, retried until done | Removal is idempotent by storage key (Q16). |
+| P5 | Cron once a day | Days of lag are fine. |
+| P6 | Outbox row in the `AccountDeleted` transaction, polled | Decision 18: seconds of lag are fine. |
