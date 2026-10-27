@@ -1,4 +1,6 @@
 import io
+import logging
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -35,6 +37,22 @@ class StoppingStorage(LocalDiskStorage):
         self._left -= 1
         if self._left == 0:
             raise self._stop
+        super().delete(key)
+
+
+class FailingStorage(LocalDiskStorage):
+    """Fails each removal of a file of the given books, as a broken disk can."""
+
+    def __init__(self, root: Path, book_ids: set[str]) -> None:
+        super().__init__(root)
+        self._book_ids = book_ids
+        self.attempts: list[str] = []
+
+    def delete(self, key: str) -> None:
+        book_id = key.split("/")[1]
+        if book_id in self._book_ids:
+            self.attempts.append(book_id)
+            raise OSError("disk busy")
         super().delete(key)
 
 
@@ -111,6 +129,7 @@ def test_p4_retries_a_removal_that_failed_until_it_is_done(
     assert file_removal(engine, clock, failing).poll() == 0
 
     assert "book_files_removed" not in events(engine, book_id)
+    clock.advance(timedelta(hours=1))
     assert removals.poll() == 1
     assert stored_files(tmp_path) == []
 
@@ -129,3 +148,64 @@ def test_p4_removes_a_book_file_that_a_crash_left_on_a_book_with_no_format(
     assert removals.poll() == 1
 
     assert stored_files(tmp_path) == []
+
+
+def test_p4_ten_removals_that_always_fail_do_not_block_an_eleventh(
+    client: TestClient,
+    engine: Engine,
+    clock: FakeClock,
+    signed_in_ana: str,
+    tmp_path: Path,
+) -> None:
+    books = [
+        str(upload(client, f"{n}.epub", epub(title=f"{n}"))["id"]) for n in range(11)
+    ]
+    for book_id in books:
+        assert client.delete(f"/api/books/{book_id}").status_code == 204
+        clock.advance(timedelta(milliseconds=1))
+    failing = FailingStorage(tmp_path / "storage", set(books[:10]))
+    removals = file_removal(engine, clock, failing)
+
+    assert removals.poll() == 0
+    clock.advance(timedelta(seconds=1))
+    assert removals.poll() == 1
+
+    assert "book_files_removed" in events(engine, books[10])
+    assert stored_files(tmp_path) == sorted(
+        f"books/{book_id}/original" for book_id in books[:10]
+    )
+
+
+def test_p4_waits_longer_after_each_failed_removal_and_logs_the_attempts(
+    client: TestClient,
+    engine: Engine,
+    clock: FakeClock,
+    signed_in_ana: str,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    book_id = _deleted_book(client)
+    failing = FailingStorage(tmp_path / "storage", {book_id})
+    removals = file_removal(engine, clock, failing)
+    start = clock.now()
+    tried_at: list[timedelta] = []
+
+    with caplog.at_level(logging.WARNING):
+        while len(tried_at) < 4 and clock.now() - start < timedelta(minutes=10):
+            before = len(failing.attempts)
+            removals.poll()
+            if len(failing.attempts) > before:
+                tried_at.append(clock.now() - start)
+            clock.advance(timedelta(seconds=1))
+
+    waits = [b - a for a, b in zip(tried_at, tried_at[1:], strict=False)]
+    assert len(waits) == 3
+    assert waits[0] < waits[1] < waits[2]
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert [getattr(r, "attempts", None) for r in warnings] == [1, 2, 3, 4]
+
+
+def _deleted_book(client: TestClient) -> str:
+    book = upload(client, "dune.epub", DUNE)
+    assert client.delete(f"/api/books/{book['id']}").status_code == 204
+    return str(book["id"])
