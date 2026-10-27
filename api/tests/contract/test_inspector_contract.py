@@ -95,6 +95,7 @@ except OSError:
 
 def test_sandbox_has_no_network_a_read_only_root_and_its_limits(image: str) -> None:
     command = sandbox_command("ebookdrop-inspect-probe", image)
+    assert command[command.index("--pull") + 1] == "never"
     at = command.index(image)
     probe = [*command[:at], "--entrypoint", "python", image, "-c", PROBE]
 
