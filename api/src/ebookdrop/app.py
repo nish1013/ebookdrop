@@ -10,10 +10,11 @@ from sqlalchemy import Engine, create_engine
 
 from ebookdrop.clock import Clock, SystemClock
 from ebookdrop.conversion.port import ConverterPort
-from ebookdrop.identity.http import add_identity
+from ebookdrop.identity.http import add_identity, signed_in_reader
 from ebookdrop.identity.service import IdentityService
 from ebookdrop.identity.store import IdentityStore
 from ebookdrop.library.conversion_jobs import ConversionJobs
+from ebookdrop.library.http import add_library
 from ebookdrop.library.service import LibraryService
 from ebookdrop.library.store import LibraryStore
 from ebookdrop.storage import LocalDiskStorage, StoragePort
@@ -23,7 +24,10 @@ def create_app(engine: Engine, clock: Clock, storage: StoragePort) -> FastAPI:
     """Build the API on one database, one clock and one storage."""
     app = FastAPI(title="ebookdrop")
     app.add_exception_handler(RequestValidationError, _refuse_body)
-    add_identity(app, IdentityService(IdentityStore(engine), clock))
+    identity = IdentityService(IdentityStore(engine), clock)
+    add_identity(app, identity)
+    library = LibraryService(LibraryStore(engine), storage, clock)
+    add_library(app, library, signed_in_reader(identity))
     return app
 
 

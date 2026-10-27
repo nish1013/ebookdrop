@@ -48,7 +48,10 @@ class FileName:
     @classmethod
     def parse(cls, raw: str | None) -> "FileName":
         """Keep the last path part and trim it. Raise `InvalidFileNameError`."""
-        raise NotImplementedError
+        value = (raw or "").replace("\\", "/").rsplit("/", 1)[-1].strip()
+        if not value or len(value) > MAX_FILE_NAME_LENGTH:
+            raise InvalidFileNameError
+        return cls(value)
 
 
 @dataclass(frozen=True)

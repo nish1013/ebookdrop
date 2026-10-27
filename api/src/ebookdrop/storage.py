@@ -1,6 +1,7 @@
 """File storage behind a port, with a local disk adapter."""
 
-from pathlib import Path
+import shutil
+from pathlib import Path, PurePosixPath
 from typing import BinaryIO, Protocol
 
 
@@ -27,7 +28,16 @@ class LocalDiskStorage:
         self._root = root
 
     def save(self, key: str, source: BinaryIO) -> None:
-        raise NotImplementedError
+        path = self._path(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("wb") as target:
+            shutil.copyfileobj(source, target)
 
     def open(self, key: str) -> BinaryIO:
-        raise NotImplementedError
+        return self._path(key).open("rb")
+
+    def _path(self, key: str) -> Path:
+        parts = PurePosixPath(key).parts
+        if not parts or key.startswith("/") or ".." in parts or "\\" in key:
+            raise InvalidKeyError(key)
+        return self._root.joinpath(*parts)

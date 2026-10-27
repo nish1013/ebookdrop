@@ -1,12 +1,21 @@
 """P1: the outbox poller that converts each received upload."""
 
+import shutil
+import tempfile
 import uuid
+from pathlib import Path
 
 from ebookdrop.clock import Clock
-from ebookdrop.conversion.port import ConverterPort
-from ebookdrop.library.service import LibraryService
+from ebookdrop.conversion.port import BookFormat, ConverterPort
+from ebookdrop.library.domain import BookEvent
+from ebookdrop.library.service import LibraryService, original_key
 from ebookdrop.library.store import LibraryStore
 from ebookdrop.storage import StoragePort
+
+_CONVERTED = {
+    BookFormat.EPUB: BookEvent.EPUB_NORMALISED,
+    BookFormat.PDF: BookEvent.PDF_KEPT_AS_IS,
+}
 
 
 class ConversionJobs:
@@ -28,8 +37,30 @@ class ConversionJobs:
 
     def poll(self, limit: int = 10) -> int:
         """Run up to `limit` waiting jobs. Return how many were taken."""
-        raise NotImplementedError
+        waiting = self._store.waiting_jobs(limit)
+        for book_id in waiting:
+            self.run(book_id)
+        return len(waiting)
 
     def run(self, book_id: uuid.UUID) -> None:
-        """Convert one upload, once per upload id, then call P3."""
-        raise NotImplementedError
+        """Convert one upload, once per upload id, then call P3.
+
+        A crash after the start leaves the book Processing for the stuck check.
+        """
+        if not self._store.start_job(book_id, self._clock.now()):
+            return
+        with tempfile.TemporaryDirectory() as work:
+            work_dir = Path(work)
+            source = work_dir / "original"
+            with (
+                self._storage.open(original_key(book_id)) as stored,
+                source.open("wb") as copy,
+            ):
+                shutil.copyfileobj(stored, copy)
+            conversion = self._converter.convert(source, work_dir)
+            self._store.record(
+                book_id,
+                [_CONVERTED[conversion.format], BookEvent.BOOK_DETAILS_EXTRACTED],
+                self._clock.now(),
+            )
+            self._library.mark_ready(book_id, conversion)
