@@ -8,7 +8,8 @@ emits the event. Step ④: the rule of each command, the data it reads, the guar
 | Command | Rule | When | Data the rule reads | Aggregate |
 |---|---|---|---|---|
 | `SignUp` | R1 One email has one account. | before the event: immediate | All accounts, by `lower(trim(email))` | None: a set rule, a unique key |
-| `SignIn`, `SignOut` | None on stored data. | | | None: plain data |
+| `SignIn` | Ten failed sign-ins per email per hour stop sign-in (decision 27). | immediate, a burst can pass it | Failed sign-ins of one email in the last hour | None: a count, no lock |
+| `SignOut` | None on stored data. | | | None: plain data |
 | `UploadBook` | R6 One book per (reader, sha256). | immediate | Ana's books, by sha256 | `Library(reader)` |
 | `UploadBook` | R10 Ana's files total 1 GB or less. | immediate | Ana's bytes used | `Library(reader)` |
 | `ConvertBook` | One conversion per upload. | | One job, by upload id | None: an idempotency key on P1 |

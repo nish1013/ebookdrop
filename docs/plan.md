@@ -26,7 +26,8 @@ Criteria: [commands.md](commands.md).
 | Method and path | Command | Answers |
 |---|---|---|
 | `POST /api/accounts` | `SignUp` | 201, 409 email taken |
-| `POST /api/sessions` | `SignIn` | 204 with cookie, 401 |
+| `POST /api/sessions` | `SignIn` | 204 with cookie, 401, 429 too many attempts |
+| `GET /api/sessions/current` | Signed-in reader | 200 with the email, 401 |
 | `DELETE /api/sessions/current` | `SignOut` | 204 |
 | `DELETE /api/accounts/me` | `DeleteAccount` | 204 |
 | `POST /api/books` | `UploadBook` | 201 Processing, 409 duplicate, 413 too large, 422 reason |
@@ -83,4 +84,29 @@ make metrics     daily share of books ready within 2 minutes
 
 ## Deviations
 
-None yet.
+## D1. A read for the signed-in reader (PR 1, 2026-10-27)
+
+**In short:** The web pages ask the server which reader is signed in.
+
+- **Plan:** The endpoint table has no read for PR 1. `GET /api/books` comes in PR 2.
+- **Built:** `GET /api/sessions/current` answers 200 with the email, or 401.
+- **Why:** S2 AC1 and S3 AC1-AC2 need a signed-in check before PR 2. The library list belongs to PR 2.
+- **Undo:** Remove the endpoint. The library page then calls `GET /api/books` for the same check.
+
+## D2. Too many failed sign-ins answer 429 (PR 1, 2026-10-27)
+
+**In short:** After 10 failed sign-ins for one email in one hour, sign-in stops for that email.
+
+- **Plan:** The threat model sets the limit. The endpoint table lists 401 only for `SignIn`.
+- **Built:** The 11th attempt gets 429 `too_many_attempts`, also with the right password.
+- **Why:** A 401 at the limit hides the lock from the reader. The 429 code is the HTTP answer for a rate limit.
+- **Undo:** Answer 401 at the limit. The count and the window stay.
+
+## D3. Sign-up signs the reader in (PR 1, 2026-10-27)
+
+**In short:** After sign-up, the page signs the reader in and shows the library.
+
+- **Plan:** S1 AC1 says Ana has an empty library. The plan names no page flow.
+- **Built:** The sign-up page calls `POST /api/accounts`, then `POST /api/sessions`.
+- **Why:** The reader must see the library after sign-up. Two calls keep one command per endpoint.
+- **Undo:** Send the reader to the sign-in page after sign-up.
