@@ -2,7 +2,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "../api/client";
-import { uploadMessageFor } from "./library.constants";
+import type { Refusal } from "./library.constants";
+import { bookAnchor, refusalFor } from "./library.constants";
 import type { Upload } from "./library.schema";
 import { uploadSchema } from "./library.schema";
 
@@ -11,7 +12,7 @@ export interface UploadFormProps {
 }
 
 export function UploadForm({ onUploaded }: UploadFormProps) {
-  const [refusal, setRefusal] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<Refusal | null>(null);
   const { register, handleSubmit, formState, reset } = useForm<Upload>({
     resolver: zodResolver(uploadSchema),
   });
@@ -28,7 +29,7 @@ export function UploadForm({ onUploaded }: UploadFormProps) {
       },
     });
     if (error) {
-      setRefusal(uploadMessageFor(error));
+      setRefusal(refusalFor(error));
       return;
     }
     setRefusal(null);
@@ -43,7 +44,17 @@ export function UploadForm({ onUploaded }: UploadFormProps) {
         <input type="file" accept=".epub,.pdf,application/epub+zip,application/pdf" {...register("files")} />
       </label>
       {formState.errors.files && <p>{formState.errors.files.message}</p>}
-      {refusal && <p role="alert">{refusal}</p>}
+      {refusal && (
+        <p role="alert">
+          {refusal.message}
+          {refusal.book && (
+            <>
+              {": "}
+              <a href={`#${bookAnchor(refusal.book.id)}`}>{refusal.book.title}</a>
+            </>
+          )}
+        </p>
+      )}
       <button type="submit" disabled={formState.isSubmitting}>
         Upload
       </button>

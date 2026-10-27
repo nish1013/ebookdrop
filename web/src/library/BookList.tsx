@@ -1,5 +1,5 @@
 import type { BookOut } from "./library.constants";
-import { STATUS_LABELS } from "./library.constants";
+import { bookAnchor, STATUS_LABELS } from "./library.constants";
 
 export interface BookListProps {
   books: BookOut[];
@@ -11,7 +11,7 @@ export function BookList({ books }: BookListProps) {
   return (
     <ul>
       {books.map((book) => (
-        <li key={book.id}>
+        <li key={book.id} id={bookAnchor(book.id)}>
           {book.cover_url ? (
             <img src={book.cover_url} alt={`Cover of ${book.title}`} width={60} />
           ) : (
