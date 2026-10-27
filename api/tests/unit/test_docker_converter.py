@@ -3,7 +3,11 @@ from pathlib import Path
 import pytest
 
 from ebookdrop.conversion.docker import DockerConverter
-from ebookdrop.conversion.port import ConversionFailedError, Failure
+from ebookdrop.conversion.port import (
+    ConversionFailedError,
+    ConverterUnavailableError,
+    Failure,
+)
 from tests.fakes import FakeDocker
 
 
@@ -24,4 +28,15 @@ def test_convert_result_stands_when_the_container_remove_goes_wrong(
         DockerConverter(run=docker).convert(book, tmp_path)
 
     assert failed.value.failure == Failure.TIMED_OUT
+    assert docker.verbs[-1] == "rm"
+
+
+def test_convert_whose_container_starts_slowly_is_unavailable_not_timed_out(
+    book: Path, tmp_path: Path
+) -> None:
+    docker = FakeDocker(slow_start=True)
+
+    with pytest.raises(ConverterUnavailableError):
+        DockerConverter(run=docker).convert(book, tmp_path)
+
     assert docker.verbs[-1] == "rm"

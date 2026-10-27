@@ -16,6 +16,9 @@ from ebookdrop.conversion.port import (
 from ebookdrop.conversion.stub import StubConverter
 from tests.samples import EPUB_MIMETYPE, PNG_MAGIC, cut, epub, pdf
 
+# The hostile converter with the title "hang" never ends, so any limit is passed.
+HANG_SECONDS = 3.0
+
 
 @pytest.fixture(params=["stub", "docker"])
 def converter(request: pytest.FixtureRequest) -> ConverterPort:
@@ -127,12 +130,13 @@ def test_sandbox_converter_fails_a_bad_book_with_its_reason(
 
 
 def test_sandbox_converter_past_its_time_limit_fails_and_removes_the_container(
-    image: str, tmp_path: Path
+    evil_image: str, tmp_path: Path
 ) -> None:
-    converter = DockerConverter(image, timeout=0.5)
+    converter = DockerConverter(evil_image, timeout=HANG_SECONDS)
+    hang = epub(title="hang")
 
     with pytest.raises(ConversionFailedError) as failed:
-        converter.convert(written(tmp_path, "slow.epub", epub()), work(tmp_path))
+        converter.convert(written(tmp_path, "slow.epub", hang), work(tmp_path))
 
     assert failed.value.failure == Failure.TIMED_OUT
     left = subprocess.run(

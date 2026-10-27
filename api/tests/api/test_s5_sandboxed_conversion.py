@@ -58,11 +58,12 @@ def test_s5_ac4_conversion_past_the_timeout_fails_as_timed_out(
     engine: Engine,
     clock: FakeClock,
     storage: LocalDiskStorage,
-    image: str,
+    evil_image: str,
     signed_in_ana: str,
 ) -> None:
-    jobs = conversion_jobs(engine, clock, storage, DockerConverter(image, 0.5))
-    book = upload(client, "slow.epub", epub(padding=4 * 1024 * 1024))
+    converter = DockerConverter(evil_image, timeout=3.0)
+    jobs = conversion_jobs(engine, clock, storage, converter)
+    book = upload(client, "slow.epub", epub(title="hang"))
 
     jobs.poll()
 
