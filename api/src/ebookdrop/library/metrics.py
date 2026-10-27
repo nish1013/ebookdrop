@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, text
 
 
 @dataclass(frozen=True)
@@ -54,4 +54,23 @@ class MetricReader:
 
     def report(self) -> MetricReport:
         """Return the whole report, oldest day first."""
-        raise NotImplementedError
+        with self._engine.connect() as connection:
+            days = connection.execute(_DAYS).all()
+            late = connection.execute(_LATE).all()
+            rejects = connection.execute(_REJECTS).all()
+        return MetricReport(
+            [DailyShare(*row) for row in days],
+            [LateBook(*row) for row in late],
+            [RejectCount(*row) for row in rejects],
+        )
+
+
+_DAYS = text(
+    "SELECT day, received, ready_in_time, share_percent, open_failures"
+    " FROM metric_daily_share ORDER BY day"
+)
+_LATE = text(
+    "SELECT book_id, received_at, ready_at FROM metric_late_books"
+    " ORDER BY received_at, book_id"
+)
+_REJECTS = text("SELECT day, reason, count FROM metric_rejects ORDER BY day, reason")

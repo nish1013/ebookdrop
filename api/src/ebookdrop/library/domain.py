@@ -3,6 +3,7 @@
 import unicodedata
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
 
@@ -14,6 +15,7 @@ QUOTA_BYTES = 1024 * 1024 * 1024
 MAX_DETAIL_LENGTH = 255
 UNKNOWN_AUTHOR = "Unknown author"
 UNTITLED = "Untitled"
+STUCK_AFTER = timedelta(minutes=5)
 
 
 class BookStatus(StrEnum):

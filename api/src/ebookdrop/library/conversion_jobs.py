@@ -13,7 +13,7 @@ from ebookdrop.conversion.port import (
     ConverterPort,
     SandboxEscapeError,
 )
-from ebookdrop.library.domain import BookDetails, BookEvent
+from ebookdrop.library.domain import STUCK_AFTER, BookDetails, BookEvent
 from ebookdrop.library.service import cover_key, original_key, staging_key
 from ebookdrop.library.store import LibraryStore
 from ebookdrop.storage import StoragePort
@@ -118,7 +118,8 @@ class ConversionJobs:
 
     def fail_stuck(self) -> int:
         """P2: fail each book still Processing at its deadline. Return how many."""
-        raise NotImplementedError
+        now = self._clock.now()
+        return self._store.fail_stuck(now - STUCK_AFTER, now)
 
     def fail(self, book_id: uuid.UUID, failed: ConversionFailedError) -> bool:
         """Record `ConversionFailed(reason)` once (R13), after an escape its block."""
