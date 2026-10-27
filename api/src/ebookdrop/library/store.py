@@ -13,6 +13,7 @@ from sqlalchemy import (
     Connection,
     DateTime,
     Engine,
+    Integer,
     MetaData,
     Row,
     Table,
@@ -96,6 +97,8 @@ _removals = Table(
     Column("book_id", UUID(as_uuid=True), primary_key=True),
     Column("format", Text),
     Column("queued_at", DateTime(timezone=True)),
+    Column("attempts", Integer),
+    Column("next_try_at", DateTime(timezone=True)),
 )
 
 
@@ -117,6 +120,7 @@ class WaitingRemoval:
 
     book_id: uuid.UUID
     format: BookFormat | None
+    attempts: int
 
 
 class LibraryStore:
@@ -379,7 +383,12 @@ class LibraryStore:
             )
             connection.execute(
                 insert(_removals),
-                {"book_id": book_id, "format": row.format, "queued_at": at},
+                {
+                    "book_id": book_id,
+                    "format": row.format,
+                    "queued_at": at,
+                    "next_try_at": at,
+                },
             )
             name = (
                 BookEvent.BOOK_DELETED_DURING_CONVERSION
@@ -389,19 +398,34 @@ class LibraryStore:
             _record(connection, book_id, [name], at)
         return True
 
-    def waiting_removals(self, limit: int) -> list[WaitingRemoval]:
-        """Return the oldest deleted books whose files wait for P4."""
+    def waiting_removals(self, due_by: datetime, limit: int) -> list[WaitingRemoval]:
+        """Return the removals due by `due_by` that P4 must try, the earliest first."""
         query = (
-            select(_removals.c.book_id, _removals.c.format)
-            .order_by(_removals.c.queued_at)
+            select(_removals.c.book_id, _removals.c.format, _removals.c.attempts)
+            .where(_removals.c.next_try_at <= due_by)
+            .order_by(_removals.c.next_try_at, _removals.c.queued_at)
             .limit(limit)
         )
         with self._engine.connect() as connection:
             rows = connection.execute(query).all()
         return [
-            WaitingRemoval(r.book_id, BookFormat(r.format) if r.format else None)
+            WaitingRemoval(
+                r.book_id, BookFormat(r.format) if r.format else None, r.attempts
+            )
             for r in rows
         ]
+
+    def retry_removal(
+        self, book_id: uuid.UUID, attempts: int, next_try_at: datetime
+    ) -> None:
+        """Record `attempts` failed tries and the time of the next one."""
+        retry = (
+            update(_removals)
+            .where(_removals.c.book_id == book_id)
+            .values(attempts=attempts, next_try_at=next_try_at)
+        )
+        with self._engine.begin() as connection:
+            connection.execute(retry)
 
     def finish_removal(self, book_id: uuid.UUID, at: datetime) -> bool:
         """Record `BookFilesRemoved` once and end the wait. `False` when done before."""

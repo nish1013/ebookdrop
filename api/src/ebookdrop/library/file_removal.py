@@ -3,7 +3,12 @@
 import logging
 
 from ebookdrop.clock import Clock
-from ebookdrop.library.domain import FAILED_KEEP, STAGING_KEEP, BookEvent
+from ebookdrop.library.domain import (
+    FAILED_KEEP,
+    STAGING_KEEP,
+    BookEvent,
+    removal_retry_after,
+)
 from ebookdrop.library.service import STAGING, stored_keys
 from ebookdrop.library.store import LibraryStore
 from ebookdrop.storage import StoragePort
@@ -25,19 +30,27 @@ class FileRemoval:
     def poll(self, limit: int = 10) -> int:
         """P4: remove the files of up to `limit` deleted books. Return how many.
 
-        A removal that fails stays queued for the next poll.
+        A removal that fails waits longer after each failure, so the removals that
+        keep failing do not block the others.
         """
+        now = self._clock.now()
         done = 0
-        for removal in self._store.waiting_removals(limit):
+        for removal in self._store.waiting_removals(now, limit):
             try:
                 for key in stored_keys(removal.book_id):
                     self._storage.delete(key)
             except OSError:
-                _log.exception(
-                    "file removal failed", extra={"book_id": removal.book_id}
+                attempts = removal.attempts + 1
+                _log.warning(
+                    "file removal failed",
+                    exc_info=True,
+                    extra={"book_id": removal.book_id, "attempts": attempts},
+                )
+                self._store.retry_removal(
+                    removal.book_id, attempts, now + removal_retry_after(attempts)
                 )
                 continue
-            done += self._store.finish_removal(removal.book_id, self._clock.now())
+            done += self._store.finish_removal(removal.book_id, now)
         return done
 
     def clean_failed(self) -> int:

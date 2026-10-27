@@ -1,10 +1,15 @@
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 
 from ebookdrop.conversion.port import BookFormat
 from ebookdrop.conversion.stub import StubConverter
-from ebookdrop.library.domain import FileName, InvalidFileNameError
+from ebookdrop.library.domain import (
+    FileName,
+    InvalidFileNameError,
+    removal_retry_after,
+)
 from ebookdrop.storage import InvalidKeyError, LocalDiskStorage
 
 
@@ -47,3 +52,16 @@ def test_stub_converter_keeps_the_bytes_and_names_the_format(
     assert conversion.format == found
     assert conversion.book.read_bytes() == head + b"rest"
     assert (conversion.title, conversion.author, conversion.cover) == (None, None, None)
+
+
+def test_a_removal_waits_10_s_then_doubles_up_to_1_h_after_any_failure_count() -> None:
+    waits = [removal_retry_after(n) for n in (1, 2, 3, 10, 50, 10_000)]
+
+    assert waits == [
+        timedelta(seconds=10),
+        timedelta(seconds=20),
+        timedelta(seconds=40),
+        timedelta(hours=1),
+        timedelta(hours=1),
+        timedelta(hours=1),
+    ]

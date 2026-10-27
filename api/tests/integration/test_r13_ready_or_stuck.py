@@ -104,4 +104,6 @@ def test_r13_delete_that_waits_on_p3_queues_the_ready_book_files(
     delete.join(timeout=10)
 
     assert (ready, deleted) == (True, [True])
-    assert store.waiting_removals(10) == [WaitingRemoval(book_id, BookFormat.EPUB)]
+    assert store.waiting_removals(TEN + timedelta(minutes=1), 10) == [
+        WaitingRemoval(book_id, BookFormat.EPUB, 0)
+    ]
