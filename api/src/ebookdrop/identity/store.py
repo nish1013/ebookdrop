@@ -26,9 +26,11 @@ from ebookdrop.identity.domain import (
     Email,
     EmailTakenError,
     SignedInReader,
+    WrongEmailOrPasswordError,
 )
 
 EMAIL_KEY_INDEX = "accounts_email_key"
+SESSION_ACCOUNT_KEY = "sessions_account_id_fkey"
 
 _metadata = MetaData()
 _accounts = Table(
@@ -103,14 +105,22 @@ class IdentityStore:
     def start_session(
         self, token_hash: str, account_id: uuid.UUID, expires_at: datetime
     ) -> None:
-        """Store a session for the account."""
+        """Store a session for the account.
+
+        Raise `WrongEmailOrPasswordError` when an account delete commits first.
+        """
         row = {
             "token_hash": token_hash,
             "account_id": account_id,
             "expires_at": expires_at,
         }
-        with self._engine.begin() as connection:
-            connection.execute(insert(_sessions), row)
+        try:
+            with self._engine.begin() as connection:
+                connection.execute(insert(_sessions), row)
+        except IntegrityError as err:
+            if _constraint(err) == SESSION_ACCOUNT_KEY:
+                raise WrongEmailOrPasswordError from err
+            raise
 
     def find_session_reader(
         self, token_hash: str, now: datetime
