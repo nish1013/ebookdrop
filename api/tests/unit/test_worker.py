@@ -61,3 +61,17 @@ def test_p4_runs_on_each_tick_and_p5_with_the_staging_sweep_once_a_day() -> None
         runs.append((removals.polls, removals.cleanups, removals.sweeps))
 
     assert runs == [(1, 1, 1), (2, 1, 1), (3, 2, 2), (4, 2, 2)]
+
+
+class BrokenCleanupRemovals(RecordingRemovals):
+    def clean_failed(self) -> int:
+        raise OSError("disk busy")
+
+
+def test_a_failed_p5_leaves_the_staging_sweep_and_the_polls_running() -> None:
+    removals = BrokenCleanupRemovals()
+    worker = Worker(RecordingJobs(), removals, FakeClock())
+
+    worker.tick()
+
+    assert (removals.sweeps, removals.polls) == (1, 1)

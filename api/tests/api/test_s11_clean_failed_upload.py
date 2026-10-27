@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
+from ebookdrop.app import file_removal
 from ebookdrop.conversion.port import (
     Conversion,
     ConversionFailedError,
@@ -17,6 +18,7 @@ from ebookdrop.library.conversion_jobs import ConversionJobs
 from ebookdrop.library.file_removal import FileRemoval
 from ebookdrop.storage import LocalDiskStorage
 from tests.api.conftest import events, upload
+from tests.api.test_s10_remove_book_files import FailingStorage
 from tests.api.test_upload_storage import stored_files
 from tests.conftest import FakeClock
 from tests.samples import pdf
@@ -99,4 +101,27 @@ def test_p5_removes_a_book_file_that_a_crash_left_on_a_failed_book(
 
     assert removals.clean_failed() == 1
 
+    assert stored_files(tmp_path) == []
+
+
+def test_p5_cleans_the_other_failed_books_when_one_removal_fails(
+    client: TestClient,
+    engine: Engine,
+    jobs: ConversionJobs,
+    clock: FakeClock,
+    removals: FileRemoval,
+    signed_in_ana: str,
+    tmp_path: Path,
+) -> None:
+    stuck = upload(client, "bad.pdf", BAD)
+    other = upload(client, "worse.pdf", pdf(title="Worse"))
+    jobs.poll()
+    clock.advance(timedelta(days=8))
+    failing = FailingStorage(tmp_path / "storage", {str(stuck["id"])})
+
+    assert file_removal(engine, clock, failing).clean_failed() == 1
+
+    assert stored_files(tmp_path) == [f"books/{stuck['id']}/original"]
+    assert "failed_upload_cleaned_up" in events(engine, other["id"])
+    assert removals.clean_failed() == 1
     assert stored_files(tmp_path) == []
