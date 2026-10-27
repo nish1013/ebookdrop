@@ -61,3 +61,24 @@ def test_failures_count_inside_the_window_only(engine: Engine) -> None:
     store.record_failure(Email.parse("ben@example.com"), NOW)
 
     assert store.count_failures(ana, since=NOW - timedelta(hours=1)) == 1
+
+
+def test_r1_lookup_uses_the_same_email_key_as_the_unique_index(engine: Engine) -> None:
+    store = IdentityStore(engine)
+    store.add_account(Email.parse("İnci@example.com"), "h")
+
+    assert store.find_account(Email.parse("İnci@example.com")) is not None
+
+
+def test_failures_count_with_the_same_email_key_as_the_unique_index(
+    engine: Engine,
+) -> None:
+    store = IdentityStore(engine)
+    store.record_failure(Email.parse("İnci@example.com"), NOW)
+
+    assert (
+        store.count_failures(
+            Email.parse(" İNCİ@example.com"), since=NOW - timedelta(hours=1)
+        )
+        == 1
+    )
