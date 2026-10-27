@@ -1,8 +1,9 @@
 """Identity endpoints."""
 
+from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, FastAPI, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -13,6 +14,7 @@ from ebookdrop.identity.domain import (
     EmailTakenError,
     IdentityError,
     InvalidEmailError,
+    SignedInReader,
     SignedOutError,
     TooManyAttemptsError,
     WrongEmailOrPasswordError,
@@ -64,9 +66,24 @@ class ErrorOut(BaseModel):
 SessionCookie = Annotated[str | None, Cookie(alias=SESSION_COOKIE)]
 
 
+def signed_in_reader(
+    service: IdentityService,
+) -> Callable[[str | None], SignedInReader]:
+    """Return a dependency that gives the session's reader, or raises 401."""
+
+    def reader(session: SessionCookie = None) -> SignedInReader:
+        found = service.signed_in(session) if session else None
+        if found is None:
+            raise SignedOutError
+        return found
+
+    return reader
+
+
 def add_identity(app: FastAPI, service: IdentityService) -> None:
     """Add the identity endpoints and their error answers to the app."""
     router = APIRouter(prefix="/api", responses={422: {"model": ErrorOut}})
+    Reader = Annotated[SignedInReader, Depends(signed_in_reader(service))]
 
     @router.post(
         "/accounts",
@@ -93,11 +110,8 @@ def add_identity(app: FastAPI, service: IdentityService) -> None:
         )
 
     @router.get("/sessions/current", responses={401: {"model": ErrorOut}})
-    def current(session: SessionCookie = None) -> ReaderOut:
-        email = service.signed_in_email(session) if session else None
-        if email is None:
-            raise SignedOutError
-        return ReaderOut(email=email)
+    def current(reader: Reader) -> ReaderOut:
+        return ReaderOut(email=reader.email)
 
     @router.delete("/sessions/current", status_code=status.HTTP_204_NO_CONTENT)
     def sign_out(response: Response, session: SessionCookie = None) -> None:

@@ -13,6 +13,7 @@ from ebookdrop.identity.domain import (
     SIGN_IN_FAILURE_WINDOW,
     Email,
     InvalidEmailError,
+    SignedInReader,
     TooManyAttemptsError,
     WrongEmailOrPasswordError,
 )
@@ -67,9 +68,9 @@ class IdentityService:
         """End the session of the token."""
         self._store.end_session(_digest(token))
 
-    def signed_in_email(self, token: str) -> str | None:
-        """Return the email of the token's live session, or `None`."""
-        return self._store.find_session_email(_digest(token), self._clock.now())
+    def signed_in(self, token: str) -> SignedInReader | None:
+        """Return the reader of the token's live session, or `None`."""
+        return self._store.find_session_reader(_digest(token), self._clock.now())
 
 
 def _digest(token: str) -> str:

@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import IntegrityError
 
-from ebookdrop.identity.domain import Email, EmailTakenError
+from ebookdrop.identity.domain import Email, EmailTakenError, SignedInReader
 from ebookdrop.identity.store import IdentityStore
 
 NOW = datetime(2026, 10, 27, 9, 0, tzinfo=UTC)
@@ -46,11 +46,13 @@ def test_session_is_found_until_it_expires_or_ends(engine: Engine) -> None:
     account_id = store.add_account(Email.parse("ana@example.com"), "h")
     store.start_session("t1", account_id, NOW + timedelta(days=14))
 
-    assert store.find_session_email("t1", NOW) == "ana@example.com"
-    assert store.find_session_email("t1", NOW + timedelta(days=14)) is None
+    assert store.find_session_reader("t1", NOW) == SignedInReader(
+        account_id, "ana@example.com"
+    )
+    assert store.find_session_reader("t1", NOW + timedelta(days=14)) is None
 
     store.end_session("t1")
-    assert store.find_session_email("t1", NOW) is None
+    assert store.find_session_reader("t1", NOW) is None
 
 
 def test_failures_count_inside_the_window_only(engine: Engine) -> None:

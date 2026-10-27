@@ -1,5 +1,6 @@
 """Identity values and rules."""
 
+import uuid
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -56,3 +57,11 @@ class TooManyAttemptsError(IdentityError):
 
 class SignedOutError(IdentityError):
     """The request has no live session."""
+
+
+@dataclass(frozen=True)
+class SignedInReader:
+    """The reader of a live session."""
+
+    id: uuid.UUID
+    email: str
