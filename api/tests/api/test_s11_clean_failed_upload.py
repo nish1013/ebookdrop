@@ -81,3 +81,22 @@ def test_staging_sweep_removes_staging_files_older_than_1_day(
 
     assert stored_files(tmp_path) == ["books/kept/original", "staging/new/book.epub"]
     assert not (tmp_path / "storage" / "staging" / "old").exists()
+
+
+def test_p5_removes_a_book_file_that_a_crash_left_on_a_failed_book(
+    client: TestClient,
+    jobs: ConversionJobs,
+    clock: FakeClock,
+    removals: FileRemoval,
+    storage: LocalDiskStorage,
+    signed_in_ana: str,
+    tmp_path: Path,
+) -> None:
+    book = upload(client, "bad.pdf", BAD)
+    jobs.poll()
+    storage.save(f"books/{book['id']}/book.pdf", io.BytesIO(b"moved before a crash"))
+    clock.advance(timedelta(days=8))
+
+    assert removals.clean_failed() == 1
+
+    assert stored_files(tmp_path) == []

@@ -1,3 +1,4 @@
+import io
 from pathlib import Path
 
 import pytest
@@ -111,4 +112,20 @@ def test_p4_retries_a_removal_that_failed_until_it_is_done(
 
     assert "book_files_removed" not in events(engine, book_id)
     assert removals.poll() == 1
+    assert stored_files(tmp_path) == []
+
+
+def test_p4_removes_a_book_file_that_a_crash_left_on_a_book_with_no_format(
+    client: TestClient,
+    removals: FileRemoval,
+    storage: LocalDiskStorage,
+    signed_in_ana: str,
+    tmp_path: Path,
+) -> None:
+    book = upload(client, "dune.epub", DUNE)
+    storage.save(f"books/{book['id']}/book.epub", io.BytesIO(b"moved before a crash"))
+    assert client.delete(f"/api/books/{book['id']}").status_code == 204
+
+    assert removals.poll() == 1
+
     assert stored_files(tmp_path) == []
