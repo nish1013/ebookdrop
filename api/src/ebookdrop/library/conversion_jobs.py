@@ -14,7 +14,12 @@ from ebookdrop.conversion.port import (
     SandboxEscapeError,
 )
 from ebookdrop.library.domain import STUCK_AFTER, BookDetails, BookEvent
-from ebookdrop.library.service import cover_key, original_key, staging_key
+from ebookdrop.library.service import (
+    book_key,
+    cover_key,
+    original_key,
+    staging_key,
+)
 from ebookdrop.library.store import LibraryStore
 from ebookdrop.storage import StoragePort
 
@@ -82,7 +87,7 @@ class ConversionJobs:
         move also removes the moved files, so a Processing book has none. A
         missing title or author gets its fallback (decision 11).
         """
-        files = {f"books/{book_id}/book.{conversion.format}": conversion.book}
+        files = {book_key(book_id, conversion.format): conversion.book}
         if conversion.cover is not None:
             files[cover_key(book_id)] = conversion.cover
         moved: list[str] = []
