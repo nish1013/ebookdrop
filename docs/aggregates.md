@@ -89,7 +89,7 @@ Step ⑤ picks a strategy for each policy.
 
 ## Contexts
 
-Step ⑤. The aggregates confirm two contexts. Conversion is a tool behind a port.
+Step ⑤. The aggregates give two contexts. Conversion is a tool behind a port.
 
 ```
 +-----------------------+   who is signed in (ask)   +---------------------------------+
@@ -108,12 +108,12 @@ Step ⑤. The aggregates confirm two contexts. Conversion is a tool behind a por
                                                      [ StoragePort ] -> file store
 ```
 
-| Draft | Confirmed | Why |
+| Part | Result | Why |
 |---|---|---|
 | Identity | Identity | `Account(reader)` owns R1 and sign-in. |
 | Library | Library | `Library(reader)` owns R6, R10, R13. It owns the book status (Q14). |
-| Conversion context | A tool behind `ConverterPort` | No aggregate. Its one rule is an idempotency key. |
-| Reading context | A view in Library | `OpenBook` reads. It decides nothing. |
+| Conversion | A tool behind `ConverterPort` | No aggregate. Its one rule is an idempotency key. |
+| Reading | A view in Library | `OpenBook` reads. It decides nothing. |
 | Metrics | A view in Library | `BookReadyLate` is derived from events 7 and 16. |
 
 ## Policy strategies
