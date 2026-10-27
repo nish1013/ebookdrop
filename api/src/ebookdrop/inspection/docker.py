@@ -28,6 +28,8 @@ def sandbox_command(name: str, image: str) -> list[str]:
         "run",
         "--rm",
         "-i",
+        "--pull",
+        "never",
         "--name",
         name,
         "--network",
