@@ -80,7 +80,7 @@ only once it is added to [decisions.md](decisions.md).
 **In short:** The report counts each ready book that the browser cannot render.
 
 - **Plan:** Decision 15 counts `BookOpenFailed` in the report. The endpoint table has no write for it.
-- **Built:** `POST /api/books/{id}/open-failures` answers 204 and records `book_open_failed` on the reader's own Ready book. Any other book answers 404 `book_not_found`, and the status never changes.
+- **Built:** `POST /api/books/{id}/open-failures` records `book_open_failed` on the reader's own Ready book with 204, else 404 `book_not_found`, and keeps the status. The report counts one open failure per book per UTC day.
 - **Why:** The render fails in the browser, so only the page knows of it. The report reads events from `book_events`, so the server must write the event.
 - **Undo:** Remove the endpoint and the call in `ReaderPage`. The report then shows 0 open failures each day.
 

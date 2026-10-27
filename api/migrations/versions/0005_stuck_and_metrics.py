@@ -29,13 +29,15 @@ SELECT received.book_id,
 FROM received LEFT JOIN ready ON ready.book_id = received.book_id
 """
 
+# A book counts one open failure per UTC day, so a retry loop cannot inflate it.
 _DAILY_SHARE = """
 CREATE VIEW metric_daily_share AS
 WITH shares AS (
     SELECT day, count(*) AS received, count(*) FILTER (WHERE in_time) AS in_time
     FROM metric_ready_times GROUP BY day
 ), open_failures AS (
-    SELECT (at AT TIME ZONE 'UTC')::date AS day, count(*) AS open_failures
+    SELECT (at AT TIME ZONE 'UTC')::date AS day,
+           count(DISTINCT book_id) AS open_failures
     FROM book_events WHERE name = 'book_open_failed' GROUP BY 1
 )
 SELECT coalesce(shares.day, open_failures.day) AS day,
