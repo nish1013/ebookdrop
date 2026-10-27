@@ -179,7 +179,7 @@ SIGSYS_EXIT = 128 + 31
 def test_convert_sandbox_has_its_limits_and_kills_a_network_socket(
     image: str,
 ) -> None:
-    command = convert_command("ebookdrop-convert-probe", image)
+    command = convert_command("ebookdrop-convert-probe", image, verb="run")
     at = command.index(image)
     probe = [*command[:at], "--entrypoint", "python", image, "-c", PROBE]
 

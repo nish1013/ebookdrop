@@ -23,7 +23,15 @@ from ebookdrop.conversion.sandbox_convert import (
     MAX_BYTES,
     UNREADABLE_EXIT,
 )
-from ebookdrop.sandbox import SANDBOX_IMAGE, Runner, remove, sandbox_command
+from ebookdrop.sandbox import (
+    SANDBOX_IMAGE,
+    Runner,
+    SandboxNotStartedError,
+    docker,
+    remove,
+    sandbox_command,
+    start,
+)
 
 NAME_PREFIX = "ebookdrop-convert-"
 SECCOMP_PROFILE = Path(__file__).with_name("seccomp.json")
@@ -47,8 +55,8 @@ _MAX_OUTPUT = sum(_LIMITS.values()) + 64 * 1024
 _UNPACK_ERRORS = (tarfile.TarError, KeyError, ValueError, TypeError, OSError)
 
 
-def convert_command(name: str, image: str) -> list[str]:
-    """The `docker run` line of one convert container."""
+def convert_command(name: str, image: str, *, verb: str = "create") -> list[str]:
+    """The `docker <verb>` line of one convert container."""
     options = [
         "--tmpfs",
         "/tmp:rw,noexec,nosuid,size=256m",  # noqa: S108
@@ -62,7 +70,7 @@ def convert_command(name: str, image: str) -> list[str]:
         "python",
     ]
     return [
-        *sandbox_command(name, image, options),
+        *sandbox_command(name, image, options, verb=verb),
         "-I",
         "-B",
         "/sandbox/sandbox_convert.py",
@@ -85,15 +93,20 @@ class DockerConverter:
     def convert(self, source: Path, work_dir: Path) -> Conversion:
         """Pipe `source` to a new container and unpack its output.
 
-        The output passes through a tar file in `work_dir`, and only the expected
-        names leave it, each under its size limit.
+        The time limit starts when the container runs. A container that does not
+        start gives no result. The output passes through a tar file in `work_dir`,
+        and only the expected names leave it, each under its size limit.
         """
         name = f"{NAME_PREFIX}{uuid.uuid4().hex}"
+        try:
+            start(name, convert_command(name, self._image), self._run)
+        except SandboxNotStartedError as err:
+            raise ConverterUnavailableError(str(err)) from err
         output = work_dir / "sandbox.tar"
         try:
             with source.open("rb") as stdin, output.open("wb") as stdout:
                 done = self._run(
-                    convert_command(name, self._image),
+                    [docker(), "attach", name],
                     stdin=stdin,
                     stdout=stdout,
                     stderr=subprocess.DEVNULL,
@@ -104,7 +117,8 @@ class DockerConverter:
             remove(name, self._run)
             raise ConversionFailedError(Failure.TIMED_OUT) from None
         except OSError as err:
-            raise ConverterUnavailableError("docker did not start") from err
+            remove(name, self._run)
+            raise ConverterUnavailableError("docker did not attach") from err
         _check_exit(done.returncode)
         try:
             return _unpack(output, source, work_dir)
