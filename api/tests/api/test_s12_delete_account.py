@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, MetaData, text
 from sqlalchemy.exc import OperationalError
@@ -18,6 +19,10 @@ from ebookdrop.conversion.port import (
     ConverterPort,
     Failure,
 )
+from ebookdrop.identity.domain import Email
+from ebookdrop.identity.http import add_identity
+from ebookdrop.identity.service import IdentityService
+from ebookdrop.identity.store import AccountRow, IdentityStore
 from ebookdrop.library.conversion_jobs import ConversionJobs
 from ebookdrop.library.domain import FileName, ReaderGoneError
 from ebookdrop.library.file_removal import FileRemoval
@@ -26,6 +31,7 @@ from ebookdrop.library.store import LibraryStore, NewUpload
 from ebookdrop.storage import LocalDiskStorage
 from ebookdrop.worker import CLEANUP_EVERY, Worker
 from tests.api.conftest import (
+    PASSWORD,
     reader_id,
     sign_in,
     sign_up,
@@ -90,6 +96,20 @@ class FailsForOneReader(LibraryStore):
         if reader_id == self._reader:
             raise OperationalError("DELETE FROM books", {}, OSError("refused"))
         return super().remove_library(reader_id, at)
+
+
+class AccountDeletedMeanwhileStore(IdentityStore):
+    """The account delete commits after sign-in finds the account."""
+
+    def __init__(self, engine: Engine, clock: FakeClock) -> None:
+        super().__init__(engine)
+        self._clock = clock
+
+    def find_account(self, email: Email) -> AccountRow | None:
+        account = super().find_account(email)
+        if account is not None:
+            self.delete_account(account.id, self._clock.now())
+        return account
 
 
 @pytest.fixture
@@ -341,3 +361,20 @@ def test_a_failed_p6_for_one_reader_stops_neither_the_other_readers_nor_p4_nor_p
     [ben_book] = client.get("/api/books").json()
     assert ben_book["status"] == "ready"
     assert _remains(engine, tmp_path, readers[CAL], [books[CAL]]) == []
+
+
+def test_a_sign_in_that_ends_after_the_account_delete_answers_wrong_email_or_password(
+    engine: Engine, clock: FakeClock, ana: str
+) -> None:
+    app = FastAPI()
+    add_identity(
+        app, IdentityService(AccountDeletedMeanwhileStore(engine, clock), clock)
+    )
+
+    with TestClient(app, base_url="https://testserver") as client:
+        response = client.post(
+            "/api/sessions", json={"email": ana, "password": PASSWORD}
+        )
+
+    assert response.status_code == 401
+    assert response.json() == {"code": "wrong_email_or_password"}
