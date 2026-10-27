@@ -1,5 +1,6 @@
 import logging
 import uuid
+from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,6 +9,7 @@ from sqlalchemy import Engine
 from ebookdrop.library.conversion_jobs import ConversionJobs
 from ebookdrop.library.metrics import MetricReader
 from tests.api.conftest import events, reader_id, sign_in, sign_up, upload
+from tests.conftest import FakeClock
 from tests.samples import epub, pdf
 
 DUNE = epub(title="Dune")
@@ -80,3 +82,21 @@ def test_s8_ac3_an_open_failure_is_counted_and_the_book_stays_ready(
     assert events(engine, book["id"])[-1] == "book_open_failed"
     assert [b["status"] for b in client.get("/api/books").json()] == ["ready"]
     assert [day.open_failures for day in MetricReader(engine).report().days] == [1]
+
+
+def test_s8_ac3_open_failures_count_one_per_book_per_utc_day(
+    client: TestClient,
+    engine: Engine,
+    clock: FakeClock,
+    jobs: ConversionJobs,
+    signed_in_ana: str,
+) -> None:
+    book = upload(client, "dune.epub", DUNE)
+    jobs.poll()
+
+    for _ in range(5):
+        client.post(f"/api/books/{book['id']}/open-failures")
+    clock.advance(timedelta(days=1))
+    client.post(f"/api/books/{book['id']}/open-failures")
+
+    assert [day.open_failures for day in MetricReader(engine).report().days] == [1, 1]
