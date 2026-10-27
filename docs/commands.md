@@ -42,6 +42,7 @@ Questions: Q13.
 
 Rules
 - R2 Only EPUB and PDF are accepted, checked by content, never by extension.
+- R14 Every check that parses the file runs in the sandbox, with a 10 s limit.
 - R3 A file is 50 MB or smaller.
 - R4 A file with DRM, or a PDF that needs a password to open, is rejected with a reason.
 - R5 A library row exists only after the last byte arrives.
@@ -53,9 +54,11 @@ Rules
 | AC1 | Ana is signed in | Ana uploads `dune.epub`, 2 MB | `UploadReceived`: Ana sees `dune.epub`, "Processing" |
 | AC2 | Ana is signed in | Ana uploads `notes.epub`, a ZIP with no EPUB `mimetype` | `UploadRejected(not_epub_or_pdf)`: "This file is not an EPUB or PDF" |
 | AC3 | Ana is signed in | Ana uploads `atlas.pdf`, 51 MB | `UploadRejected(too_large)`: "Files must be 50 MB or smaller" |
+| AC14 | Ana is signed in | A request sends 4 GB with no Content-Length | The app stops reading at 50 MiB + 1 byte. `UploadRejected(too_large)`. |
 | AC4 | Ana is signed in | Ana uploads `store.epub` with `META-INF/encryption.xml` | `UploadRejected(drm_protected)`: "This file has DRM" |
 | AC11 | Ana is signed in | Ana uploads `bank.pdf`, which needs a password to open | `UploadRejected(password_protected)`: "This PDF needs a password. Remove it, then upload again." |
 | AC12 | Ana is signed in | Ana uploads `tax-guide.pdf`, which opens with no password and blocks print | `UploadReceived` |
+| AC13 | Ana is signed in | Ana uploads `cut.epub`, a ZIP cut at 60% | `UploadRejected(damaged)`: "This file is damaged" |
 | AC5 | Ana uploads `dune.epub` | The network stops at 1 MB of 2 MB | `UploadAbandoned`: Ana's library has no `dune.epub` row |
 | AC6 | Ana owns `dune.epub`, sha256 `9f2c…` | Ana uploads the same bytes as `dune-copy.epub` | `DuplicateUploadDetected`: "This book is already in your library", with a link to `dune.epub` |
 | AC7 | Ana is signed out | A request uploads `dune.epub` | The app answers 401. No event. |
@@ -79,7 +82,7 @@ Rules
 | AC2 | `BookReady` for `dune.epub` | P3 runs again for the same conversion | No second `BookReady`. One row. |
 | AC3 | `dune.epub` was received at 10:00:00 | `BookReady` at 10:02:30 | `BookReadyLate` in the metric report |
 | AC5 | 100 `UploadReceived` and 7 `UploadRejected` in one day, 96 `BookReady` within 2 minutes | The metric report runs | 96% of 100. Rejects: 7, by reason. |
-| AC4 | Ana deleted `dune.epub` during conversion | `EpubNormalised` arrives | No `BookReady`. No row comes back. |
+| AC4 | Ana deleted `dune.epub` during conversion | `EpubNormalised` arrives | No `BookReady`. No row comes back. `staging/u1/` is removed. |
 
 Questions: Q4, Q7, Q15.
 
@@ -90,7 +93,7 @@ draft contexts.
 
 | AC | Given | When | Then |
 |---|---|---|---|
-| AC1 | `dune.epub` is "Processing" since 10:00, deadline is the conversion timeout plus a margin | The deadline passes | `ConversionFailed(stuck)`: Ana sees "Failed: try again" |
+| AC1 | `dune.epub` is "Processing" since 10:00, deadline 5 minutes | The deadline passes | `ConversionFailed(stuck)`: Ana sees "Failed: try again" |
 | AC2 | `dune.epub` became `BookReady` at 10:00:40 | The deadline passes | No event. The book stays ready. |
 
 Questions: Q12, Q14.
@@ -202,14 +205,14 @@ Questions: Q4, Q8, Q10, Q11, Q12.
 | Q7 | S6 | A late book: an alert, or a report only? | product | decided | Report only. Decision 14. |
 | Q8 | S8 | A ready book that does not open: back to failed? | product | decided | Render check before ready. Status stays. Decision 15. |
 | Q9 | S8, S9 | Another reader's book: 404 or 403? | product | decided | 404. Decision 16. |
-| Q10 | S4, S5 | The size check: before or after the transfer ends? | tech | open | |
-| Q11 | S4, S5 | A crash after `UploadReceived` and before the queue. | tech | open | |
-| Q12 | S5, S7 | The timeout value and the stuck deadline. | tech | open | |
-| Q13 | S1-S3 | Sign-in method and session length. | tech | open | |
-| Q14 | S6, S7 | Who owns the book status during conversion? | boundary | open | |
-| Q15 | S6, S9 | A delete during conversion, then the result arrives. | boundary | open | |
-| Q16 | S10 | Row gone, file stays: the order of a delete. | tech | open | |
-| Q17 | S4, S5 | A corrupt file: reject at intake, or fail in conversion? | boundary | open | |
+| Q10 | S4, S5 | The size check: before or after the transfer ends? | tech | decided | Before: Content-Length, then a byte count. Decision 20. |
+| Q11 | S4, S5 | A crash after `UploadReceived` and before the queue. | tech | decided | Outbox row in the same transaction. Card C3. |
+| Q12 | S5, S7 | The timeout value and the stuck deadline. | tech | decided | 60 s and 5 min. Decision 21. |
+| Q13 | S1-S3 | Sign-in method and session length. | tech | decided | Email and password, 14 days. Decision 22. |
+| Q14 | S6, S7 | Who owns the book status during conversion? | boundary | decided | Library. Decider card D2. |
+| Q15 | S6, S9 | A delete during conversion, then the result arrives. | boundary | decided | Staging folder, removed on 0 rows. Decision 23. |
+| Q16 | S10 | Row gone, file stays: the order of a delete. | tech | decided | Rows first, then P4 retries until done. Card C3. |
+| Q17 | S4, S5 | A corrupt file: reject at intake, or fail in conversion? | boundary | decided | A sandboxed inspect at intake. Decision 19. |
 
 ## Out of scope
 
