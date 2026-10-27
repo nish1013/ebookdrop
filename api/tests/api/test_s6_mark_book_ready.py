@@ -1,9 +1,11 @@
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, text
+from sqlalchemy.exc import DBAPIError
 
 from ebookdrop.app import conversion_jobs
 from ebookdrop.conversion.port import BookFormat, Conversion, ConverterPort
@@ -44,6 +46,28 @@ class FailedMeanwhileConverter(DuneConverter):
 @pytest.fixture
 def converter() -> ConverterPort:
     return DuneConverter()
+
+
+@pytest.fixture
+def failing_book_ready(engine: Engine) -> Iterator[None]:
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE FUNCTION refuse_ready() RETURNS trigger LANGUAGE plpgsql AS"
+                " $$ BEGIN RAISE EXCEPTION 'book ready refused'; END $$;"
+                " CREATE TRIGGER refuse_ready BEFORE INSERT ON book_events"
+                " FOR EACH ROW WHEN (NEW.name = 'book_ready')"
+                " EXECUTE FUNCTION refuse_ready();"
+            )
+        )
+    yield
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "DROP TRIGGER refuse_ready ON book_events;"
+                " DROP FUNCTION refuse_ready();"
+            )
+        )
 
 
 def test_s6_ac1_ready_book_shows_title_author_and_cover(
@@ -109,4 +133,22 @@ def test_s6_ac2_book_that_left_processing_leaves_no_converted_file(
     jobs.poll()
 
     assert "book_ready" not in events(engine, book["id"])
+    assert stored_files(tmp_path) == [f"books/{book['id']}/original"]
+
+
+def test_book_ready_that_does_not_commit_leaves_no_file_at_the_book_key(
+    client: TestClient,
+    engine: Engine,
+    jobs: ConversionJobs,
+    signed_in_ana: str,
+    tmp_path: Path,
+    failing_book_ready: None,
+) -> None:
+    book = upload(client, "dune.epub", DUNE)
+
+    with pytest.raises(DBAPIError):
+        jobs.poll()
+
+    [listed] = client.get("/api/books").json()
+    assert listed["status"] == "processing"
     assert stored_files(tmp_path) == [f"books/{book['id']}/original"]
