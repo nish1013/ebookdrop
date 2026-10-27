@@ -78,34 +78,42 @@ class ConversionJobs:
         """P3: record `BookReady` once (R13), and move the files to the book key.
 
         The converted files wait in `staging/<upload id>/` until the update.
-        With no update, the staging files go (decision 23). A missing title or
-        author gets its fallback (decision 11).
+        With no update, the staging files go (decision 23). A failure after the
+        move also removes the moved files, so a Processing book has none. A
+        missing title or author gets its fallback (decision 11).
         """
         files = {f"books/{book_id}/book.{conversion.format}": conversion.book}
         if conversion.cover is not None:
             files[cover_key(book_id)] = conversion.cover
-        for key, path in files.items():
-            with path.open("rb") as converted:
-                self._storage.save(staging_key(book_id, key), converted)
+        moved: list[str] = []
 
         def move() -> None:
             for key in files:
                 self._storage.move(staging_key(book_id, key), key)
+                moved.append(key)
 
-        details = BookDetails.extracted(
-            conversion.title, conversion.author, self._store.file_name(book_id)
-        )
-        ready = self._store.mark_ready(
-            book_id,
-            conversion.format,
-            details,
-            conversion.cover is not None,
-            self._clock.now(),
-            move,
-        )
-        if not ready:
-            for key in files:
-                self._storage.delete(staging_key(book_id, key))
+        ready = False
+        try:
+            for key, path in files.items():
+                with path.open("rb") as converted:
+                    self._storage.save(staging_key(book_id, key), converted)
+            details = BookDetails.extracted(
+                conversion.title, conversion.author, self._store.file_name(book_id)
+            )
+            ready = self._store.mark_ready(
+                book_id,
+                conversion.format,
+                details,
+                conversion.cover is not None,
+                self._clock.now(),
+                move,
+            )
+        finally:
+            if not ready:
+                for key in files:
+                    self._storage.delete(staging_key(book_id, key))
+                for key in moved:
+                    self._storage.delete(key)
         return ready
 
     def fail(self, book_id: uuid.UUID, failed: ConversionFailedError) -> bool:
