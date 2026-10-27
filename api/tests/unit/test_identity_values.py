@@ -3,11 +3,8 @@ import pytest
 from ebookdrop.identity.domain import Email, InvalidEmailError
 
 
-def test_r1_email_drops_outer_spaces_and_compares_in_lowercase() -> None:
-    email = Email.parse(" ANA@Example.com ")
-
-    assert email.value == "ANA@Example.com"
-    assert email.key == "ana@example.com"
+def test_r1_email_drops_outer_spaces() -> None:
+    assert Email.parse(" ANA@Example.com ").value == "ANA@Example.com"
 
 
 @pytest.mark.parametrize(

@@ -6,6 +6,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Column,
+    ColumnElement,
     DateTime,
     Engine,
     MetaData,
@@ -14,6 +15,7 @@ from sqlalchemy import (
     delete,
     func,
     insert,
+    literal,
     select,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -44,7 +46,7 @@ _failures = Table(
     Column("email_key", Text),
     Column("at", DateTime(timezone=True)),
 )
-_email_key = func.lower(func.trim(_accounts.c.email))
+_account_email_key = func.lower(func.trim(_accounts.c.email))
 
 
 @dataclass(frozen=True)
@@ -82,7 +84,9 @@ class IdentityStore:
         """Return the account with this email key, or `None`."""
         query = select(_accounts.c.id, _accounts.c.password_hash)
         with self._engine.connect() as connection:
-            row = connection.execute(query.where(_email_key == email.key)).first()
+            row = connection.execute(
+                query.where(_account_email_key == _email_key(email))
+            ).first()
         return AccountRow(row.id, row.password_hash) if row else None
 
     def start_session(
@@ -117,15 +121,22 @@ class IdentityStore:
     def record_failure(self, email: Email, at: datetime) -> None:
         """Store one failed sign-in for the email key."""
         with self._engine.begin() as connection:
-            connection.execute(insert(_failures), {"email_key": email.key, "at": at})
+            connection.execute(
+                insert(_failures).values(email_key=_email_key(email), at=at)
+            )
 
     def count_failures(self, email: Email, since: datetime) -> int:
         """Count failed sign-ins for the email key after `since`."""
         query = select(func.count()).where(
-            _failures.c.email_key == email.key, _failures.c.at > since
+            _failures.c.email_key == _email_key(email), _failures.c.at > since
         )
         with self._engine.connect() as connection:
             return connection.execute(query).scalar_one()
+
+
+def _email_key(email: Email) -> ColumnElement[str]:
+    # The unique index expression. Python lower() folds some letters differently.
+    return func.lower(func.trim(literal(email.value)))
 
 
 def _constraint(err: IntegrityError) -> str | None:

@@ -21,10 +21,9 @@ class InvalidEmailError(IdentityError):
 
 @dataclass(frozen=True)
 class Email:
-    """An email address. Outer spaces do not count, and case does not count (R1)."""
+    """An email address without outer spaces. The store ignores its case (R1)."""
 
     value: str
-    key: str
 
     @classmethod
     def parse(cls, raw: str) -> "Email":
@@ -40,7 +39,7 @@ class Email:
             or len(value) > MAX_EMAIL_LENGTH
         ):
             raise InvalidEmailError
-        return cls(value, value.lower())
+        return cls(value)
 
 
 class EmailTakenError(IdentityError):
