@@ -62,7 +62,7 @@ only once it is added to [decisions.md](decisions.md).
 **In short:** A conversion that opens an internet socket stops at once and fails as crashed.
 
 - **Plan:** S5 AC5 gives `evil.epub`, which opens a network socket, `SandboxEscapeBlocked` and then `ConversionFailed(crashed)`. Event 14 also names disk access.
-- **Built:** The convert container runs with Docker's default seccomp profile plus one change: an IPv4 or IPv6 socket kills the process. The test image swaps `ebook-convert` for a program that connects out, and a probe proves the block.
+- **Built:** The convert container runs with Docker's default seccomp profile plus one change: an IPv4 or IPv6 socket kills the process. The test image swaps `ebook-convert` for a hostile program that connects out, hangs or floods the output, and a probe proves the block.
 - **Why:** A book file cannot run code, so only an exploited parser opens a socket, and a test cannot ship a real exploit. With no network alone, a connect fails quietly and looks like a damaged file. The root is read-only, so a disk write fails and has no event.
 - **Undo:** Remove the profile from `convert_command`. A socket then fails with no network, and the book fails as malformed.
 
