@@ -30,11 +30,16 @@ def create_app(
     """Build the API on one database, one clock, one storage and one inspector."""
     app = FastAPI(title="ebookdrop")
     app.add_exception_handler(RequestValidationError, _refuse_body)
-    identity = IdentityService(IdentityStore(engine), clock)
+    identity = identity_service(engine, clock)
     add_identity(app, identity)
     library = LibraryService(LibraryStore(engine), storage, clock, inspector)
     add_library(app, library, signed_in_reader(identity))
     return app
+
+
+def identity_service(engine: Engine, clock: Clock) -> IdentityService:
+    """Build the identity commands on the same parts as the API."""
+    return IdentityService(IdentityStore(engine), clock)
 
 
 def conversion_jobs(
