@@ -268,6 +268,10 @@ class LibraryStore:
             _record(connection, book_id, [BookEvent.CONVERSION_FAILED], at)
         return True
 
+    def fail_stuck(self, received_by: datetime, at: datetime) -> int:
+        """Fail each book still Processing that was received by `received_by`."""
+        raise NotImplementedError
+
     def _book_by_file(self, reader_id: uuid.UUID, sha256: str) -> Book:
         query = select(_books).where(
             _books.c.reader_id == reader_id, _books.c.sha256 == sha256

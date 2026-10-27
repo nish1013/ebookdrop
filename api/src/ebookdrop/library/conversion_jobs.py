@@ -116,6 +116,10 @@ class ConversionJobs:
                     self._storage.delete(key)
         return ready
 
+    def fail_stuck(self) -> int:
+        """P2: fail each book still Processing at its deadline. Return how many."""
+        raise NotImplementedError
+
     def fail(self, book_id: uuid.UUID, failed: ConversionFailedError) -> bool:
         """Record `ConversionFailed(reason)` once (R13), after an escape its block."""
         escape = isinstance(failed, SandboxEscapeError)

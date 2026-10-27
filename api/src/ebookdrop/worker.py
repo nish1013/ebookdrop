@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from ebookdrop.app import conversion_jobs, storage_from_env
-from ebookdrop.clock import SystemClock
+from ebookdrop.clock import Clock, SystemClock
 from ebookdrop.conversion.docker import DockerConverter
 from ebookdrop.conversion.port import ConverterUnavailableError
 
@@ -23,12 +23,15 @@ class Jobs(Protocol):
 
     def poll(self) -> int: ...
 
+    def fail_stuck(self) -> int: ...
+
 
 class Worker:
     """Runs the library steps in one process."""
 
-    def __init__(self, jobs: Jobs) -> None:
+    def __init__(self, jobs: Jobs, clock: Clock) -> None:
         self._jobs = jobs
+        self._clock = clock
 
     def tick(self) -> int:
         """Run one poll. Return how many jobs it took."""
@@ -50,8 +53,9 @@ def main() -> None:
     """Run the worker on `DATABASE_URL` and `STORAGE_DIR`."""
     logging.basicConfig(level=logging.INFO)
     engine = create_engine(os.environ["DATABASE_URL"])
-    jobs = conversion_jobs(engine, SystemClock(), storage_from_env(), DockerConverter())
-    Worker(jobs).run_until(threading.Event())
+    clock = SystemClock()
+    jobs = conversion_jobs(engine, clock, storage_from_env(), DockerConverter())
+    Worker(jobs, clock).run_until(threading.Event())
 
 
 if __name__ == "__main__":
