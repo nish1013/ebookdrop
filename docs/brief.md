@@ -13,7 +13,12 @@
 | Constraints | Playground time box of 2 weeks (assumed). Stack is open. |
 | Risk tier | `high bar`: untrusted file parsing (security) and private libraries (personal data). |
 
-High-bar checks: file size limit, type check by content and not by extension, conversion in a sandbox with a timeout, each library visible to its owner only.
+High-bar checks:
+
+- a file size limit
+- a type check by content, not by extension
+- conversion in a sandbox with a timeout
+- each library visible to its owner only
 
 ## Pushback
 
