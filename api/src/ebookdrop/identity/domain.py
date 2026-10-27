@@ -35,3 +35,7 @@ class Email:
         ):
             raise InvalidEmailError
         return cls(value, value.lower())
+
+
+class EmailTakenError(IdentityError):
+    """An account with this email exists (R1)."""
