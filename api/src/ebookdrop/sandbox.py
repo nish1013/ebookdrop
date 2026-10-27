@@ -2,12 +2,18 @@
 
 import shutil
 import subprocess
+from collections.abc import Sequence
 
 SANDBOX_IMAGE = "ebookdrop-sandbox"
 
 
-def sandbox_command(name: str, image: str, *, verb: str = "run") -> list[str]:
-    """The `docker <verb>` line of one sandbox container, ending with the image."""
+def sandbox_command(
+    name: str, image: str, options: Sequence[str] = (), *, verb: str = "run"
+) -> list[str]:
+    """The `docker <verb>` line of one sandbox container, ending with the image.
+
+    `options` add to the limits. They never replace one.
+    """
     return [
         docker(),
         verb,
@@ -34,6 +40,7 @@ def sandbox_command(name: str, image: str, *, verb: str = "run") -> list[str]:
         "no-new-privileges",
         "--user",
         "65534:65534",
+        *options,
         image,
     ]
 

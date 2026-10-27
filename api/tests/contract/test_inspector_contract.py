@@ -18,8 +18,6 @@ from ebookdrop.sandbox import sandbox_command
 from tests.fakes import InProcessInspector
 from tests.samples import DRM_ALGORITHM, EPUB_MIMETYPE, cut, epub, pdf
 
-API = Path(__file__).resolve().parents[2]
-TEST_IMAGE = "ebookdrop-sandbox:test"
 ACCEPTED = [
     ("dune.epub", epub(), BookFormat.EPUB),
     ("tax-guide.pdf", pdf(owner="owner", allow_print=False), BookFormat.PDF),
@@ -30,17 +28,6 @@ REFUSED = [
     ("bank.pdf", pdf(user="secret", owner="owner"), Refusal.PASSWORD_PROTECTED),
     ("cut.epub", cut(epub(padding=64 * 1024), 0.6), Refusal.DAMAGED),
 ]
-
-
-@pytest.fixture(scope="session")
-def image() -> str:
-    subprocess.run(
-        ["docker", "build", "-q", "-t", TEST_IMAGE, "-f", "sandbox/Dockerfile", "."],
-        cwd=API,
-        check=True,
-        capture_output=True,
-    )
-    return TEST_IMAGE
 
 
 @pytest.fixture(params=["in_process", "docker"])

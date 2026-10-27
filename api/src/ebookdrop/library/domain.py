@@ -8,6 +8,8 @@ from pathlib import Path
 MAX_FILE_NAME_LENGTH = 255
 MAX_FILE_BYTES = 50 * 1024 * 1024
 QUOTA_BYTES = 1024 * 1024 * 1024
+MAX_DETAIL_LENGTH = 255
+UNKNOWN_AUTHOR = "Unknown author"
 
 
 class BookStatus(StrEnum):
@@ -28,6 +30,8 @@ class BookEvent(StrEnum):
     PDF_KEPT_AS_IS = "pdf_kept_as_is"
     BOOK_DETAILS_EXTRACTED = "book_details_extracted"
     BOOK_READY = "book_ready"
+    SANDBOX_ESCAPE_BLOCKED = "sandbox_escape_blocked"
+    CONVERSION_FAILED = "conversion_failed"
 
 
 class IntakeEvent(StrEnum):
@@ -102,6 +106,25 @@ class FileName:
         if not value or len(value) > MAX_FILE_NAME_LENGTH:
             raise InvalidFileNameError
         return cls(value)
+
+
+@dataclass(frozen=True)
+class BookDetails:
+    """The title and author the library shows. Neither is ever empty."""
+
+    title: str
+    author: str
+
+    @classmethod
+    def extracted(
+        cls, title: str | None, author: str | None, file_name: FileName
+    ) -> "BookDetails":
+        """Clean the details read from a book. A missing one gets its fallback.
+
+        The title falls back to the file name without its extension, the author
+        to "Unknown author" (decision 11).
+        """
+        raise NotImplementedError
 
 
 @dataclass(frozen=True)

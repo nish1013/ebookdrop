@@ -42,6 +42,7 @@ def test_s6_ac1_ready_book_shows_title_author_and_cover(
         "author": "Frank Herbert",
         "status": "ready",
         "cover_url": f"/api/books/{book['id']}/cover",
+        "failure": None,
     }
     cover = client.get(listed["cover_url"])
     assert cover.status_code == 200

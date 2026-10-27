@@ -1,3 +1,4 @@
+import subprocess
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -12,6 +13,10 @@ from testcontainers.community.postgres import PostgresContainer
 from ebookdrop.app import create_app
 from ebookdrop.storage import LocalDiskStorage
 from tests.fakes import InProcessInspector
+
+API = Path(__file__).resolve().parents[1]
+TEST_IMAGE = "ebookdrop-sandbox:test"
+EVIL_IMAGE = "ebookdrop-sandbox:evil"
 
 
 class FakeClock:
@@ -73,3 +78,22 @@ def client(
     app = create_app(engine, clock, storage, inspector)
     with TestClient(app, base_url="https://testserver") as client:
         yield client
+
+
+def _build(*args: str) -> None:
+    subprocess.run(
+        ["docker", "build", "-q", *args], cwd=API, check=True, capture_output=True
+    )
+
+
+@pytest.fixture(scope="session")
+def image() -> str:
+    _build("-t", TEST_IMAGE, "-f", "sandbox/Dockerfile", ".")
+    return TEST_IMAGE
+
+
+@pytest.fixture(scope="session")
+def evil_image(image: str) -> str:
+    """The sandbox image with a converter that a hostile book took over."""
+    _build("-t", EVIL_IMAGE, "--build-arg", f"BASE={image}", "tests/sandbox/evil")
+    return EVIL_IMAGE
