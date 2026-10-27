@@ -5,7 +5,7 @@ import os
 import uvicorn
 from alembic import command
 from alembic.config import Config
-from testcontainers.postgres import PostgresContainer
+from testcontainers.community.postgres import PostgresContainer
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
