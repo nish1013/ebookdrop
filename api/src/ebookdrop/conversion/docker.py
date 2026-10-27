@@ -1,10 +1,13 @@
 """The Docker adapter of `ConverterPort`: one locked-down container per job."""
 
 import json
+import os
 import shutil
 import subprocess
 import tarfile
+import threading
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 from ebookdrop.conversion.port import (
@@ -53,6 +56,7 @@ _LIMITS = {
 }
 _MAX_OUTPUT = sum(_LIMITS.values()) + 64 * 1024
 _UNPACK_ERRORS = (tarfile.TarError, KeyError, ValueError, TypeError, OSError)
+_CHUNK = 64 * 1024
 
 
 def convert_command(name: str, image: str, *, verb: str = "create") -> list[str]:
@@ -95,7 +99,8 @@ class DockerConverter:
 
         The time limit starts when the container runs. A container that does not
         start gives no result. The output passes through a tar file in `work_dir`,
-        and only the expected names leave it, each under its size limit.
+        and only the expected names leave it, each under its size limit. Output
+        past the cap stops the container at once.
         """
         name = f"{NAME_PREFIX}{uuid.uuid4().hex}"
         try:
@@ -103,8 +108,25 @@ class DockerConverter:
         except SandboxNotStartedError as err:
             raise ConverterUnavailableError(str(err)) from err
         output = work_dir / "sandbox.tar"
+        sink = _CappedOutput(output, _MAX_OUTPUT, lambda: remove(name, self._run))
         try:
-            with source.open("rb") as stdin, output.open("wb") as stdout:
+            try:
+                code = self._attach(name, source, sink.write_end)
+            finally:
+                sink.close()
+            if sink.passed:
+                raise ConversionFailedError(Failure.CRASHED)
+            _check_exit(code)
+            try:
+                return _unpack(output, source, work_dir)
+            except _UNPACK_ERRORS as err:
+                raise ConversionFailedError(Failure.CRASHED) from err
+        finally:
+            output.unlink(missing_ok=True)
+
+    def _attach(self, name: str, source: Path, stdout: int) -> int:
+        try:
+            with source.open("rb") as stdin:
                 done = self._run(
                     [docker(), "attach", name],
                     stdin=stdin,
@@ -119,13 +141,41 @@ class DockerConverter:
         except OSError as err:
             remove(name, self._run)
             raise ConverterUnavailableError("docker did not attach") from err
-        _check_exit(done.returncode)
+        return done.returncode
+
+
+class _CappedOutput:
+    """Copies a pipe to `target`. Past `cap` bytes it calls `overflow` once.
+
+    The bytes past the cap are read and dropped, so the writer never blocks.
+    """
+
+    def __init__(self, target: Path, cap: int, overflow: Callable[[], None]) -> None:
+        self._read_end, self.write_end = os.pipe()
+        self.passed = False
+        self._target = target
+        self._cap = cap
+        self._overflow = overflow
+        self._copy = threading.Thread(target=self._run, daemon=True)
+        self._copy.start()
+
+    def close(self) -> None:
+        os.close(self.write_end)
+        self._copy.join()
+
+    def _run(self) -> None:
+        count = 0
         try:
-            return _unpack(output, source, work_dir)
-        except _UNPACK_ERRORS as err:
-            raise ConversionFailedError(Failure.CRASHED) from err
+            with self._target.open("wb") as target:
+                while chunk := os.read(self._read_end, _CHUNK):
+                    count += len(chunk)
+                    if count <= self._cap:
+                        target.write(chunk)
+                    elif not self.passed:
+                        self.passed = True
+                        self._overflow()
         finally:
-            output.unlink(missing_ok=True)
+            os.close(self._read_end)
 
 
 def _check_exit(code: int) -> None:
@@ -139,8 +189,6 @@ def _check_exit(code: int) -> None:
 
 
 def _unpack(output: Path, source: Path, work_dir: Path) -> Conversion:
-    if output.stat().st_size > _MAX_OUTPUT:
-        raise ValueError("output too large")
     with tarfile.open(output, "r:") as tar:
         files = {m.name: _read(tar, m) for m in tar.getmembers() if m.name in _LIMITS}
     details = json.loads(files["details.json"])
