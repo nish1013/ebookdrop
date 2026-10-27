@@ -126,3 +126,15 @@ Step ⑤. The deciders confirm two contexts. Conversion is a tool behind a port.
 | P4 | Outbox row in the delete transaction, polled, retried until done | Removal is idempotent by storage key (Q16). |
 | P5 | Cron once a day | Days of lag are fine. |
 | P6 | Outbox row in the `AccountDeleted` transaction, polled | Decision 18: seconds of lag are fine. |
+
+## Checks
+
+| Check | Result | Note |
+|---|---|---|
+| Every event has a command or a policy | Pass, 2 exceptions | `ProcessingDeadlinePassed` is time. `BookReadyLate` is derived on read. |
+| Every command has an actor or a policy | Pass | S5, S6, S7, S10, S11 run from P1 to P5. P6 has no command name. It removes rows only. |
+| Every word comes from the timeline | Pass | Reject and failure reasons are on the timeline, events 5 and 13. |
+| One command changes one decider | Pass | `DeleteAccount` changes `Account(reader)` only (decision 18). |
+| Each fact lives in one place | Pass, 1 copy | `libraries.bytes_used` copies the sum of `books.size`. Reason: the quota guard needs one row to update. |
+| Each policy names its strategy | Pass | Policy strategies table. |
+| Each arrow between contexts is ask | Pass | Library asks Identity for the signed-in reader. P6 carries an event, by outbox. |
