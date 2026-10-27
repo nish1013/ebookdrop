@@ -104,6 +104,7 @@ export interface components {
             author: string | null;
             /** Cover Url */
             cover_url: string | null;
+            failure: components["schemas"]["Failure"] | null;
             /**
              * Id
              * Format: uuid
@@ -142,6 +143,12 @@ export interface components {
             /** Code */
             code: string;
         };
+        /**
+         * Failure
+         * @description Why a conversion fails (`ConversionFailed`).
+         * @enum {string}
+         */
+        Failure: "malformed" | "unreadable" | "timed_out" | "crashed";
         /**
          * ReaderOut
          * @description A reader as the pages see it.

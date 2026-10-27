@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from starlette.requests import ClientDisconnect
 
+from ebookdrop.conversion.port import Failure
 from ebookdrop.identity.domain import SignedInReader
 from ebookdrop.identity.http import ErrorOut
 from ebookdrop.library.domain import (
@@ -75,6 +76,7 @@ class BookOut(BaseModel):
     author: str | None
     status: BookStatus
     cover_url: str | None
+    failure: Failure | None
 
 
 def add_library(
@@ -171,4 +173,5 @@ def _out(book: Book) -> BookOut:
         author=book.author,
         status=book.status,
         cover_url=cover_url,
+        failure=book.failure,
     )

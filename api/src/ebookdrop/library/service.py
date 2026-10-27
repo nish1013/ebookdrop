@@ -34,6 +34,11 @@ def cover_key(book_id: uuid.UUID) -> str:
     return f"books/{book_id}/cover.png"
 
 
+def staging_key(book_id: uuid.UUID, book_key: str) -> str:
+    """The staging key of a converted file before `BookReady` (decision 23)."""
+    return f"staging/{book_id}/{book_key.rsplit('/', 1)[-1]}"
+
+
 class LibraryService:
     """Runs the library commands on one store, storage, inspector and clock."""
 

@@ -1,7 +1,7 @@
 """Library rows in Postgres."""
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -25,10 +25,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
-from ebookdrop.conversion.port import BookFormat
+from ebookdrop.conversion.port import BookFormat, Failure
 from ebookdrop.library.domain import (
     QUOTA_BYTES,
     Book,
+    BookDetails,
     BookEvent,
     BookStatus,
     DuplicateUploadError,
@@ -56,6 +57,7 @@ _books = Table(
     Column("ready_at", DateTime(timezone=True)),
     Column("sha256", Text),
     Column("size", BigInteger),
+    Column("failure", Text),
 )
 _libraries = Table(
     "libraries",
@@ -207,34 +209,63 @@ class LibraryStore:
         with self._engine.begin() as connection:
             _record(connection, book_id, names, at)
 
+    def file_name(self, book_id: uuid.UUID) -> FileName:
+        """Return the uploaded file name of a book."""
+        query = select(_books.c.file_name).where(_books.c.id == book_id)
+        with self._engine.connect() as connection:
+            return FileName(connection.execute(query).scalar_one())
+
     def mark_ready(
         self,
         book_id: uuid.UUID,
         book_format: BookFormat,
-        title: str | None,
-        author: str | None,
+        details: BookDetails,
         has_cover: bool,
         at: datetime,
+        move: Callable[[], None],
     ) -> bool:
-        """Move a Processing book to Ready with `BookReady`. `False` when not (R13)."""
-        values: dict[str, object] = {
-            "status": BookStatus.READY,
-            "format": book_format,
-            "author": author,
-            "has_cover": has_cover,
-            "ready_at": at,
-        }
-        if title is not None:
-            values["title"] = title
+        """Move a Processing book to Ready with `BookReady`. `False` when not (R13).
+
+        `move` runs inside the transaction, after the update, so the book and its
+        files become Ready together.
+        """
         ready = (
             update(_books)
             .where(_books.c.id == book_id, _books.c.status == BookStatus.PROCESSING)
-            .values(values)
+            .values(
+                status=BookStatus.READY,
+                format=book_format,
+                title=details.title,
+                author=details.author,
+                has_cover=has_cover,
+                ready_at=at,
+            )
         )
         with self._engine.begin() as connection:
             if connection.execute(ready).rowcount != 1:
                 return False
+            move()
             _record(connection, book_id, [BookEvent.BOOK_READY], at)
+        return True
+
+    def fail(
+        self, book_id: uuid.UUID, failure: Failure, escape: bool, at: datetime
+    ) -> bool:
+        """Move a Processing book to Failed with `ConversionFailed`. R13 holds.
+
+        An escape is recorded as `SandboxEscapeBlocked` first, whatever the status.
+        """
+        failed = (
+            update(_books)
+            .where(_books.c.id == book_id, _books.c.status == BookStatus.PROCESSING)
+            .values(status=BookStatus.FAILED, failure=failure)
+        )
+        with self._engine.begin() as connection:
+            if escape:
+                _record(connection, book_id, [BookEvent.SANDBOX_ESCAPE_BLOCKED], at)
+            if connection.execute(failed).rowcount != 1:
+                return False
+            _record(connection, book_id, [BookEvent.CONVERSION_FAILED], at)
         return True
 
     def _book_by_file(self, reader_id: uuid.UUID, sha256: str) -> Book:
@@ -246,7 +277,15 @@ class LibraryStore:
 
 
 def _book(row: Row[Any]) -> Book:
-    return Book(row.id, row.title, row.author, BookStatus(row.status), row.has_cover)
+    failure = Failure(row.failure) if row.failure else None
+    return Book(
+        row.id,
+        row.title,
+        row.author,
+        BookStatus(row.status),
+        row.has_cover,
+        failure,
+    )
 
 
 def _use_quota(connection: Connection, reader_id: uuid.UUID, size: int) -> bool:

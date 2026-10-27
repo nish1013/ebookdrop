@@ -2,6 +2,7 @@ import type { components } from "../api/schema";
 
 export type BookOut = components["schemas"]["BookOut"];
 export type BookStatus = BookOut["status"];
+export type Failure = NonNullable<BookOut["failure"]>;
 
 export const REFRESH_MS = 1000;
 
@@ -9,6 +10,13 @@ export const STATUS_LABELS: Record<BookStatus, string> = {
   processing: "Processing",
   ready: "Ready",
   failed: "Failed",
+};
+
+export const FAILURE_MESSAGES: Record<Failure, string> = {
+  malformed: "This file is damaged",
+  unreadable: "This book cannot be shown",
+  timed_out: "This book took too long to convert. Upload it again.",
+  crashed: "This book could not be converted",
 };
 
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;

@@ -1,15 +1,19 @@
 """Library values and rules."""
 
+import unicodedata
 import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+
+from ebookdrop.conversion.port import Failure
 
 MAX_FILE_NAME_LENGTH = 255
 MAX_FILE_BYTES = 50 * 1024 * 1024
 QUOTA_BYTES = 1024 * 1024 * 1024
 MAX_DETAIL_LENGTH = 255
 UNKNOWN_AUTHOR = "Unknown author"
+UNTITLED = "Untitled"
 
 
 class BookStatus(StrEnum):
@@ -122,9 +126,15 @@ class BookDetails:
         """Clean the details read from a book. A missing one gets its fallback.
 
         The title falls back to the file name without its extension, the author
-        to "Unknown author" (decision 11).
+        to "Unknown author" (decision 11). A name with no printable letter gives
+        "Untitled".
         """
-        raise NotImplementedError
+        stem, _, _ = file_name.value.rpartition(".")
+        fallback_title = _clean(stem) or _clean(file_name.value) or UNTITLED
+        return cls(
+            _clean(title) or fallback_title,
+            _clean(author) or UNKNOWN_AUTHOR,
+        )
 
 
 @dataclass(frozen=True)
@@ -136,6 +146,7 @@ class Book:
     author: str | None
     status: BookStatus
     has_cover: bool
+    failure: Failure | None = None
 
 
 @dataclass(frozen=True)
@@ -146,3 +157,11 @@ class ReceivedFile:
     path: Path
     size: int
     sha256: str
+
+
+def _clean(raw: str | None) -> str:
+    printable = "".join(
+        c if c.isprintable() else " " if c.isspace() else ""
+        for c in unicodedata.normalize("NFC", raw or "")
+    )
+    return " ".join(printable.split())[:MAX_DETAIL_LENGTH].strip()
