@@ -1,5 +1,6 @@
 """The Docker adapter of `InspectorPort`: one locked-down container per file."""
 
+import logging
 import shutil
 import subprocess
 import uuid
@@ -21,6 +22,8 @@ Runner = Callable[..., subprocess.CompletedProcess[bytes]]
 INSPECT_IMAGE = "ebookdrop-inspect"
 NAME_PREFIX = "ebookdrop-inspect-"
 START_SECONDS = 30.0
+REMOVE_SECONDS = 10.0
+_log = logging.getLogger(__name__)
 # 137 is a kill by the memory limit. The docker client itself exits 1 or 125-127.
 _DAMAGED_EXITS = {CRASH_EXIT, 137}
 
@@ -115,7 +118,15 @@ class DockerInspector:
                 raise InspectorUnavailableError(f"docker exit {done.returncode}")
 
     def _remove(self, name: str) -> None:
-        self._run([_docker(), "rm", "-f", name], capture_output=True, check=False)
+        try:
+            self._run(
+                [_docker(), "rm", "-f", name],
+                capture_output=True,
+                timeout=REMOVE_SECONDS,
+                check=False,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            _log.warning("inspect container %s was not removed", name)
 
 
 def _docker() -> str:
