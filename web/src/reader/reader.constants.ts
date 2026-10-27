@@ -1,7 +1,8 @@
 import type { ReaderMessage, ReaderState } from "./reader.types";
 
 export const BOOK_POLICY = "script-src 'none'; object-src 'none'";
-export const SECTION_TYPES: ReadonlySet<string> = new Set(["application/xhtml+xml", "text/html"]);
+export const POLICY_TYPES: ReadonlySet<string> = new Set(["application/xhtml+xml", "text/html"]);
+export const MARKUP_TYPES: ReadonlySet<string> = new Set([...POLICY_TYPES, "image/svg+xml"]);
 export const PDF_SCALE = 1.5;
 
 const STATES: ReadonlySet<string> = new Set<ReaderState>([

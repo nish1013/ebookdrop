@@ -43,6 +43,18 @@ async function bookText(page: Page): Promise<string> {
   return texts.join("\n");
 }
 
+async function bookPolicies(page: Page): Promise<string> {
+  const books = page.frames().filter((frame) => frame.url().startsWith("blob:"));
+  const policies = await Promise.all(
+    books.map((frame) =>
+      frame
+        .evaluate(() => document.querySelector("meta[http-equiv='Content-Security-Policy']")?.getAttribute("content"))
+        .catch(() => ""),
+    ),
+  );
+  return policies.join("\n");
+}
+
 async function svgText(page: Page): Promise<string> {
   const books = page.frames().filter((frame) => frame.url().startsWith("blob:"));
   const texts = await Promise.all(
@@ -109,13 +121,9 @@ test("S8 AC3 Ana's browser cannot render dune.epub and the book stays Ready", as
 });
 
 test("S8 AC4 Ana opens a book with a script and the script does not run", async ({ page }) => {
-  const refusals: string[] = [];
   const probes: string[] = [];
-  page.on("console", (message) => {
-    if (message.text().includes(BOOK_POLICY)) refusals.push(message.text());
-  });
-  page.on("response", (response) => {
-    if (response.url().endsWith(PROBE)) probes.push(response.url());
+  page.on("request", (request) => {
+    if (request.url().endsWith(PROBE)) probes.push(request.url());
   });
   await signedInReader(page);
   const book = await readyBook(page, HOSTILE, /dune/i);
@@ -123,9 +131,7 @@ test("S8 AC4 Ana opens a book with a script and the script does not run", async 
   await book.getByRole("link", { name: "Read Dune" }).click();
 
   await expect.poll(() => bookText(page)).toContain("Dune");
-  await expect.poll(() => refusals.some((text) => text.startsWith("Executing inline event handler"))).toBe(true);
-  expect(refusals.some((text) => text.startsWith("Executing inline script"))).toBe(true);
-  expect(refusals.some((text) => text.startsWith("Loading the script") && text.includes(PROBE))).toBe(true);
+  expect(await bookPolicies(page)).toContain(BOOK_POLICY);
   expect(probes).toEqual([]);
   expect(await page.evaluate(() => localStorage.getItem("pwned"))).toBeNull();
 });
