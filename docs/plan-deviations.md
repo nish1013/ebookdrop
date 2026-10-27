@@ -74,3 +74,30 @@ only once it is added to [decisions.md](decisions.md).
 - **Built:** Titles and authors lose control characters and extra spaces, and stop at 255 characters. A file name with nothing printable left gives "Untitled".
 - **Why:** The intake keeps control characters in a file name, and the title comes from an untrusted book. The list must show a title that is never empty.
 - **Undo:** Refuse such a file name at intake with `invalid_file_name`. Then remove `UNTITLED`.
+
+## D12. The reader page reports an open failure to the server (PR 6, 2026-10-27)
+
+**In short:** The report counts each ready book that the browser cannot render.
+
+- **Plan:** Decision 15 counts `BookOpenFailed` in the report. The endpoint table has no write for it.
+- **Built:** `POST /api/books/{id}/open-failures` answers 204 and records `book_open_failed` on the reader's own Ready book. Any other book answers 404 `book_not_found`, and the status never changes.
+- **Why:** The render fails in the browser, so only the page knows of it. The report reads events from `book_events`, so the server must write the event.
+- **Undo:** Remove the endpoint and the call in `ReaderPage`. The report then shows 0 open failures each day.
+
+## D13. Book frames allow scripts, and a policy blocks them (PR 6, 2026-10-27)
+
+**In short:** Every page of a book carries a policy that runs no script, because the frame sandbox alone cannot stop one.
+
+- **Plan:** The reader shows a book in a sandboxed iframe with CSP `script-src 'none'` (S8 AC4, threat model).
+- **Built:** The reader frame and the foliate-js page frames have `allow-scripts allow-same-origin`. Each EPUB page gets a `script-src 'none'` meta policy first in its head, and `reader.html` allows scripts from its own origin only.
+- **Why:** foliate-js reads the page frame document, so the frame needs the same origin, and it sets `allow-scripts` on its frames. With both flags, a sandbox does not stop a script, so the policy is the guard.
+- **Undo:** Render each page in a frame without `allow-scripts` through a patched foliate-js. The policy then stays as a second guard.
+
+## D14. A book that is not Ready answers 404 (PR 6, 2026-10-27)
+
+**In short:** A read of a Processing or Failed book gets the answer for a missing book.
+
+- **Plan:** The endpoint table gives `GET /api/books/{id}/content` 200, or 404 for a missing or foreign book.
+- **Built:** The owner's book that is not Ready answers 404 `book_not_found`, and the app logs no `BookAccessDenied` for it.
+- **Why:** Only a Ready book has a readable file. The library list shows a Read link for Ready books only, so the page never asks for the others.
+- **Undo:** Answer 409 `book_not_ready` for the owner's book that is not Ready.
