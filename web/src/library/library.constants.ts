@@ -17,6 +17,7 @@ export const FAILURE_MESSAGES: Record<Failure, string> = {
   unreadable: "This book cannot be shown",
   timed_out: "This book took too long to convert. Upload it again.",
   crashed: "This book could not be converted",
+  stuck: "This upload got stuck. Try again.",
 };
 
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;

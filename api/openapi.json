@@ -110,12 +110,13 @@
         "type": "object"
       },
       "Failure": {
-        "description": "Why a conversion fails (`ConversionFailed`).",
+        "description": "Why a conversion fails (`ConversionFailed`).\n\n`stuck` comes from the deadline (P2), never from a converter.",
         "enum": [
           "malformed",
           "unreadable",
           "timed_out",
-          "crashed"
+          "crashed",
+          "stuck"
         ],
         "title": "Failure",
         "type": "string"

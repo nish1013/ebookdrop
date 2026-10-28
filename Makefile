@@ -1,4 +1,4 @@
-.PHONY: install test test-api test-web lint api-types sandbox-image
+.PHONY: install test test-api test-web lint api-types sandbox-image metrics
 
 install:
 	cd api && uv sync
@@ -23,3 +23,6 @@ api-types:
 
 sandbox-image:
 	docker build -q -t ebookdrop-sandbox -f api/sandbox/Dockerfile api
+
+metrics:
+	cd api && uv run python scripts/metrics.py

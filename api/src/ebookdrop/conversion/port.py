@@ -27,12 +27,16 @@ class Conversion:
 
 
 class Failure(StrEnum):
-    """Why a conversion fails (`ConversionFailed`)."""
+    """Why a conversion fails (`ConversionFailed`).
+
+    `stuck` comes from the deadline (P2), never from a converter.
+    """
 
     MALFORMED = "malformed"
     UNREADABLE = "unreadable"
     TIMED_OUT = "timed_out"
     CRASHED = "crashed"
+    STUCK = "stuck"
 
 
 class ConversionError(Exception):

@@ -146,9 +146,11 @@ export interface components {
         /**
          * Failure
          * @description Why a conversion fails (`ConversionFailed`).
+         *
+         *     `stuck` comes from the deadline (P2), never from a converter.
          * @enum {string}
          */
-        Failure: "malformed" | "unreadable" | "timed_out" | "crashed";
+        Failure: "malformed" | "unreadable" | "timed_out" | "crashed" | "stuck";
         /**
          * ReaderOut
          * @description A reader as the pages see it.

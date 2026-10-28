@@ -268,6 +268,27 @@ class LibraryStore:
             _record(connection, book_id, [BookEvent.CONVERSION_FAILED], at)
         return True
 
+    def fail_stuck(self, received_by: datetime, at: datetime) -> int:
+        """Fail each book still Processing that was received by `received_by` (P2).
+
+        The status condition is the R13 guard against a `MarkBookReady` that
+        commits first. Return how many books failed.
+        """
+        stuck = (
+            update(_books)
+            .where(
+                _books.c.status == BookStatus.PROCESSING,
+                _books.c.received_at <= received_by,
+            )
+            .values(status=BookStatus.FAILED, failure=Failure.STUCK)
+            .returning(_books.c.id)
+        )
+        with self._engine.begin() as connection:
+            failed = list(connection.execute(stuck).scalars())
+            for book_id in failed:
+                _record(connection, book_id, [BookEvent.CONVERSION_FAILED], at)
+        return len(failed)
+
     def _book_by_file(self, reader_id: uuid.UUID, sha256: str) -> Book:
         query = select(_books).where(
             _books.c.reader_id == reader_id, _books.c.sha256 == sha256
