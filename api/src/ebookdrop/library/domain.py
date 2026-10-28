@@ -3,8 +3,11 @@
 import uuid
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 MAX_FILE_NAME_LENGTH = 255
+MAX_FILE_BYTES = 50 * 1024 * 1024
+QUOTA_BYTES = 1024 * 1024 * 1024
 
 
 class BookStatus(StrEnum):
@@ -27,12 +30,59 @@ class BookEvent(StrEnum):
     BOOK_READY = "book_ready"
 
 
+class IntakeEvent(StrEnum):
+    """The names of the recorded intake events that make no book."""
+
+    UPLOAD_REJECTED = "upload_rejected"
+    UPLOAD_ABANDONED = "upload_abandoned"
+    DUPLICATE_UPLOAD_DETECTED = "duplicate_upload_detected"
+
+
+class RejectReason(StrEnum):
+    """Why an upload does not become a book (event 5)."""
+
+    TOO_LARGE = "too_large"
+    NOT_EPUB_OR_PDF = "not_epub_or_pdf"
+    DRM_PROTECTED = "drm_protected"
+    PASSWORD_PROTECTED = "password_protected"  # noqa: S105
+    DAMAGED = "damaged"
+    OVER_QUOTA = "over_quota"
+
+
 class LibraryError(Exception):
     """Root of the library errors."""
 
 
 class InvalidFileNameError(LibraryError):
     """The upload has no usable file name."""
+
+
+class InvalidUploadError(LibraryError):
+    """The request holds no complete file part."""
+
+
+class UploadRejectedError(LibraryError):
+    """The upload breaks an intake rule. The reason names it."""
+
+    def __init__(self, reason: RejectReason) -> None:
+        super().__init__(reason.value)
+        self.reason = reason
+
+
+class DuplicateUploadError(LibraryError):
+    """The reader already owns a book with the same bytes (R6)."""
+
+    def __init__(self, book: "Book") -> None:
+        super().__init__(str(book.id))
+        self.book = book
+
+
+class UploadAbandonedError(LibraryError):
+    """The transfer stopped before the last byte (event 4)."""
+
+
+class InspectUnavailableError(LibraryError):
+    """The sandbox could not inspect the file. The reader can try again."""
 
 
 class BookNotFoundError(LibraryError):
@@ -63,3 +113,13 @@ class Book:
     author: str | None
     status: BookStatus
     has_cover: bool
+
+
+@dataclass(frozen=True)
+class ReceivedFile:
+    """An upload whose last byte arrived, in a work file."""
+
+    raw_name: str | None
+    path: Path
+    size: int
+    sha256: str

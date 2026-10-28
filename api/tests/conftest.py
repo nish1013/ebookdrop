@@ -11,6 +11,7 @@ from testcontainers.community.postgres import PostgresContainer
 
 from ebookdrop.app import create_app
 from ebookdrop.storage import LocalDiskStorage
+from tests.fakes import InProcessInspector
 
 
 class FakeClock:
@@ -58,9 +59,17 @@ def storage(tmp_path: Path) -> LocalDiskStorage:
 
 
 @pytest.fixture
+def inspector() -> InProcessInspector:
+    return InProcessInspector()
+
+
+@pytest.fixture
 def client(
-    engine: Engine, clock: FakeClock, storage: LocalDiskStorage
+    engine: Engine,
+    clock: FakeClock,
+    storage: LocalDiskStorage,
+    inspector: InProcessInspector,
 ) -> Iterator[TestClient]:
-    app = create_app(engine, clock, storage)
+    app = create_app(engine, clock, storage, inspector)
     with TestClient(app, base_url="https://testserver") as client:
         yield client

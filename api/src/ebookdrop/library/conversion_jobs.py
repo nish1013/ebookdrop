@@ -6,9 +6,9 @@ import uuid
 from pathlib import Path
 
 from ebookdrop.clock import Clock
-from ebookdrop.conversion.port import BookFormat, ConverterPort
+from ebookdrop.conversion.port import BookFormat, Conversion, ConverterPort
 from ebookdrop.library.domain import BookEvent
-from ebookdrop.library.service import LibraryService, original_key
+from ebookdrop.library.service import cover_key, original_key
 from ebookdrop.library.store import LibraryStore
 from ebookdrop.storage import StoragePort
 
@@ -26,13 +26,11 @@ class ConversionJobs:
         store: LibraryStore,
         storage: StoragePort,
         converter: ConverterPort,
-        library: LibraryService,
         clock: Clock,
     ) -> None:
         self._store = store
         self._storage = storage
         self._converter = converter
-        self._library = library
         self._clock = clock
 
     def poll(self, limit: int = 10) -> int:
@@ -63,4 +61,20 @@ class ConversionJobs:
                 [_CONVERTED[conversion.format], BookEvent.BOOK_DETAILS_EXTRACTED],
                 self._clock.now(),
             )
-            self._library.mark_ready(book_id, conversion)
+            self.mark_ready(book_id, conversion)
+
+    def mark_ready(self, book_id: uuid.UUID, conversion: Conversion) -> bool:
+        """P3: store the converted files and record `BookReady` once (R13)."""
+        with conversion.book.open("rb") as book:
+            self._storage.save(f"books/{book_id}/book.{conversion.format}", book)
+        if conversion.cover is not None:
+            with conversion.cover.open("rb") as cover:
+                self._storage.save(cover_key(book_id), cover)
+        return self._store.mark_ready(
+            book_id,
+            conversion.format,
+            conversion.title,
+            conversion.author,
+            conversion.cover is not None,
+            self._clock.now(),
+        )

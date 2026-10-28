@@ -2,15 +2,19 @@
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     Connection,
     DateTime,
     Engine,
     MetaData,
+    Row,
     Table,
     Text,
     insert,
@@ -18,9 +22,23 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
 
 from ebookdrop.conversion.port import BookFormat
-from ebookdrop.library.domain import Book, BookEvent, BookStatus, FileName
+from ebookdrop.library.domain import (
+    QUOTA_BYTES,
+    Book,
+    BookEvent,
+    BookStatus,
+    DuplicateUploadError,
+    FileName,
+    IntakeEvent,
+    RejectReason,
+    UploadRejectedError,
+)
+
+ONE_BOOK_PER_FILE = "books_reader_sha256"
 
 _metadata = MetaData()
 _books = Table(
@@ -36,6 +54,22 @@ _books = Table(
     Column("has_cover", Boolean),
     Column("received_at", DateTime(timezone=True)),
     Column("ready_at", DateTime(timezone=True)),
+    Column("sha256", Text),
+    Column("size", BigInteger),
+)
+_libraries = Table(
+    "libraries",
+    _metadata,
+    Column("reader_id", UUID(as_uuid=True), primary_key=True),
+    Column("bytes_used", BigInteger),
+)
+_intake_events = Table(
+    "intake_events",
+    _metadata,
+    Column("reader_id", UUID(as_uuid=True)),
+    Column("name", Text),
+    Column("reason", Text),
+    Column("at", DateTime(timezone=True)),
 )
 _jobs = Table(
     "conversion_jobs",
@@ -53,35 +87,75 @@ _events = Table(
 )
 
 
+@dataclass(frozen=True)
+class NewUpload:
+    """A received and inspected file, ready to become a book."""
+
+    book_id: uuid.UUID
+    reader_id: uuid.UUID
+    name: FileName
+    sha256: str
+    size: int
+    at: datetime
+
+
 class LibraryStore:
     """Reads and writes books, conversion jobs and book events."""
 
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
-    def add_upload(
-        self, book_id: uuid.UUID, reader_id: uuid.UUID, name: FileName, at: datetime
-    ) -> Book:
-        """Insert the book, its outbox job and its events in one transaction (P1)."""
+    def add_upload(self, upload: NewUpload) -> Book:
+        """Add the book under R6 and R10 in one transaction.
+
+        The commit makes the book and its outbox job (P1) visible together.
+        """
         row = {
-            "id": book_id,
-            "reader_id": reader_id,
-            "file_name": name.value,
-            "title": name.value,
+            "id": upload.book_id,
+            "reader_id": upload.reader_id,
+            "file_name": upload.name.value,
+            "title": upload.name.value,
             "status": BookStatus.PROCESSING,
             "has_cover": False,
-            "received_at": at,
+            "received_at": upload.at,
+            "sha256": upload.sha256,
+            "size": upload.size,
         }
+        try:
+            with self._engine.begin() as connection:
+                connection.execute(insert(_books), row)
+                if not _use_quota(connection, upload.reader_id, upload.size):
+                    raise UploadRejectedError(RejectReason.OVER_QUOTA)
+                connection.execute(
+                    insert(_jobs), {"book_id": upload.book_id, "queued_at": upload.at}
+                )
+                _record(
+                    connection,
+                    upload.book_id,
+                    [BookEvent.UPLOAD_RECEIVED, BookEvent.CONVERSION_QUEUED],
+                    upload.at,
+                )
+        except IntegrityError as err:
+            if _constraint(err) != ONE_BOOK_PER_FILE:
+                raise
+            raise DuplicateUploadError(
+                self._book_by_file(upload.reader_id, upload.sha256)
+            ) from None
+        return Book(
+            upload.book_id, upload.name.value, None, BookStatus.PROCESSING, False
+        )
+
+    def record_intake(
+        self,
+        reader_id: uuid.UUID,
+        name: IntakeEvent,
+        reason: RejectReason | None,
+        at: datetime,
+    ) -> None:
+        """Append one intake event that made no book."""
+        row = {"reader_id": reader_id, "name": name, "reason": reason, "at": at}
         with self._engine.begin() as connection:
-            connection.execute(insert(_books), row)
-            connection.execute(insert(_jobs), {"book_id": book_id, "queued_at": at})
-            _record(
-                connection,
-                book_id,
-                [BookEvent.UPLOAD_RECEIVED, BookEvent.CONVERSION_QUEUED],
-                at,
-            )
-        return Book(book_id, name.value, None, BookStatus.PROCESSING, False)
+            connection.execute(insert(_intake_events), row)
 
     def list_books(self, reader_id: uuid.UUID) -> list[Book]:
         """Return the reader's books, newest first."""
@@ -92,10 +166,7 @@ class LibraryStore:
         )
         with self._engine.connect() as connection:
             rows = connection.execute(query).all()
-        return [
-            Book(r.id, r.title, r.author, BookStatus(r.status), r.has_cover)
-            for r in rows
-        ]
+        return [_book(r) for r in rows]
 
     def has_cover(self, reader_id: uuid.UUID, book_id: uuid.UUID) -> bool:
         """Say if the reader's own book has a cover. A foreign book has none."""
@@ -165,6 +236,39 @@ class LibraryStore:
                 return False
             _record(connection, book_id, [BookEvent.BOOK_READY], at)
         return True
+
+    def _book_by_file(self, reader_id: uuid.UUID, sha256: str) -> Book:
+        query = select(_books).where(
+            _books.c.reader_id == reader_id, _books.c.sha256 == sha256
+        )
+        with self._engine.connect() as connection:
+            return _book(connection.execute(query).one())
+
+
+def _book(row: Row[Any]) -> Book:
+    return Book(row.id, row.title, row.author, BookStatus(row.status), row.has_cover)
+
+
+def _use_quota(connection: Connection, reader_id: uuid.UUID, size: int) -> bool:
+    connection.execute(
+        pg_insert(_libraries)
+        .values(reader_id=reader_id, bytes_used=0)
+        .on_conflict_do_nothing()
+    )
+    claim = (
+        update(_libraries)
+        .where(
+            _libraries.c.reader_id == reader_id,
+            _libraries.c.bytes_used + size <= QUOTA_BYTES,
+        )
+        .values(bytes_used=_libraries.c.bytes_used + size)
+    )
+    return connection.execute(claim).rowcount == 1
+
+
+def _constraint(err: IntegrityError) -> str | None:
+    diag = getattr(err.orig, "diag", None)
+    return getattr(diag, "constraint_name", None)
 
 
 def _record(

@@ -11,11 +11,40 @@ export const STATUS_LABELS: Record<BookStatus, string> = {
   failed: "Failed",
 };
 
+export const MAX_FILE_BYTES = 50 * 1024 * 1024;
+export const TOO_LARGE_MESSAGE = "Files must be 50 MB or smaller";
+const FALLBACK_MESSAGE = "Something went wrong. Try again.";
+
 const MESSAGES: Record<string, string> = {
   invalid_file_name: "This file has no usable name",
+  not_epub_or_pdf: "This file is not an EPUB or PDF",
+  too_large: TOO_LARGE_MESSAGE,
+  drm_protected: "This file has DRM",
+  password_protected: "This PDF needs a password. Remove it, then upload again.",
+  damaged: "This file is damaged",
+  over_quota: "Your library is full (1 GB)",
+  duplicate_upload: "This book is already in your library",
 };
 
-export function uploadMessageFor(error: object): string {
+export interface BookLink {
+  id: string;
+  title: string;
+}
+
+export interface Refusal {
+  message: string;
+  book: BookLink | null;
+}
+
+export function bookAnchor(id: string): string {
+  return `book-${id}`;
+}
+
+export function refusalFor(error: object): Refusal {
   const code = "code" in error && typeof error.code === "string" ? error.code : "";
-  return MESSAGES[code] ?? "Something went wrong. Try again.";
+  const book =
+    "book_id" in error && "title" in error && typeof error.book_id === "string" && typeof error.title === "string"
+      ? { id: error.book_id, title: error.title }
+      : null;
+  return { message: MESSAGES[code] ?? FALLBACK_MESSAGE, book };
 }

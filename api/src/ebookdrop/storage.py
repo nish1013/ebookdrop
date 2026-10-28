@@ -1,5 +1,6 @@
 """File storage behind a port, with a local disk adapter."""
 
+import contextlib
 import shutil
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO, Protocol
@@ -14,6 +15,10 @@ class StoragePort(Protocol):
 
     def open(self, key: str) -> BinaryIO:
         """Open the file at `key` for reading. Raise `FileNotFoundError` when absent."""
+        ...
+
+    def delete(self, key: str) -> None:
+        """Remove the file at `key`. A missing file is no error."""
         ...
 
 
@@ -35,6 +40,12 @@ class LocalDiskStorage:
 
     def open(self, key: str) -> BinaryIO:
         return self._path(key).open("rb")
+
+    def delete(self, key: str) -> None:
+        path = self._path(key)
+        path.unlink(missing_ok=True)
+        with contextlib.suppress(OSError):
+            path.parent.rmdir()
 
     def _path(self, key: str) -> Path:
         parts = PurePosixPath(key).parts

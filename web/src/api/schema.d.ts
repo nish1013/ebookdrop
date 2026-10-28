@@ -95,11 +95,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** Body_upload_book_api_books_post */
-        Body_upload_book_api_books_post: {
-            /** File */
-            file: string;
-        };
         /**
          * BookOut
          * @description A book as the library list shows it.
@@ -124,6 +119,21 @@ export interface components {
          * @enum {string}
          */
         BookStatus: "processing" | "ready" | "failed";
+        /**
+         * DuplicateOut
+         * @description The reject of a file the reader already owns, with a link to that book.
+         */
+        DuplicateOut: {
+            /**
+             * Book Id
+             * Format: uuid
+             */
+            book_id: string;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+        };
         /**
          * ErrorOut
          * @description A refused request. `code` names the reason.
@@ -262,7 +272,10 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_upload_book_api_books_post"];
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
             };
         };
         responses: {
@@ -284,8 +297,35 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateOut"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

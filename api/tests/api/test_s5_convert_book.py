@@ -6,9 +6,10 @@ from sqlalchemy import Engine
 from ebookdrop.library.conversion_jobs import ConversionJobs
 from ebookdrop.storage import LocalDiskStorage
 from tests.api.conftest import events, upload
+from tests.samples import epub, pdf
 
-DUNE = b"PK\x03\x04dune"
-ATLAS = b"%PDF-1.7 atlas"
+DUNE = epub()
+ATLAS = pdf()
 
 
 def test_s5_ac1_epub_upload_is_queued_started_and_normalised(

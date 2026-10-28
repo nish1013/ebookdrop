@@ -1,12 +1,16 @@
 """Library endpoints."""
 
+import tempfile
 import uuid
 from collections.abc import Callable
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, FastAPI, Request, UploadFile, status
+from fastapi import APIRouter, Depends, FastAPI, Request, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
+from starlette.requests import ClientDisconnect
 
 from ebookdrop.identity.domain import SignedInReader
 from ebookdrop.identity.http import ErrorOut
@@ -14,18 +18,53 @@ from ebookdrop.library.domain import (
     Book,
     BookNotFoundError,
     BookStatus,
+    DuplicateUploadError,
+    InspectUnavailableError,
     InvalidFileNameError,
+    InvalidUploadError,
     LibraryError,
+    RejectReason,
+    UploadAbandonedError,
+    UploadRejectedError,
 )
 from ebookdrop.library.service import LibraryService
+from ebookdrop.library.upload_stream import declared_too_large, receive_upload
 
 _ANSWERS: dict[type[LibraryError], tuple[int, str]] = {
     InvalidFileNameError: (
         status.HTTP_422_UNPROCESSABLE_CONTENT,
         "invalid_file_name",
     ),
+    InvalidUploadError: (status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_request"),
+    UploadAbandonedError: (status.HTTP_400_BAD_REQUEST, "upload_abandoned"),
+    InspectUnavailableError: (
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        "inspect_unavailable",
+    ),
     BookNotFoundError: (status.HTTP_404_NOT_FOUND, "book_not_found"),
 }
+_FILE_BODY = {
+    "requestBody": {
+        "required": True,
+        "content": {
+            "multipart/form-data": {
+                "schema": {
+                    "type": "object",
+                    "required": ["file"],
+                    "properties": {"file": {"type": "string", "format": "binary"}},
+                }
+            }
+        },
+    }
+}
+
+
+class DuplicateOut(BaseModel):
+    """The reject of a file the reader already owns, with a link to that book."""
+
+    code: str
+    book_id: uuid.UUID
+    title: str
 
 
 class BookOut(BaseModel):
@@ -49,9 +88,33 @@ def add_library(
     )
     Reader = Annotated[SignedInReader, Depends(signed_in)]
 
-    @router.post("/books", status_code=status.HTTP_201_CREATED)
-    def upload_book(reader: Reader, file: UploadFile) -> BookOut:
-        return _out(service.upload(reader.id, file.filename, file.file))
+    @router.post(
+        "/books",
+        status_code=status.HTTP_201_CREATED,
+        openapi_extra=_FILE_BODY,
+        responses={
+            409: {"model": DuplicateOut},
+            413: {"model": ErrorOut},
+            503: {"model": ErrorOut},
+        },
+    )
+    async def upload_book(reader: Reader, request: Request) -> BookOut:
+        if declared_too_large(request):
+            raise await run_in_threadpool(
+                service.reject, reader.id, RejectReason.TOO_LARGE
+            )
+        with tempfile.TemporaryDirectory() as work:
+            try:
+                received = await receive_upload(request, Path(work))
+            except UploadRejectedError as rejected:
+                raise await run_in_threadpool(
+                    service.reject, reader.id, rejected.reason
+                ) from None
+            except ClientDisconnect:
+                await run_in_threadpool(service.abandon, reader.id)
+                raise UploadAbandonedError from None
+            book = await run_in_threadpool(service.upload, reader.id, received)
+        return _out(book)
 
     @router.get("/books")
     def list_books(reader: Reader) -> list[BookOut]:
@@ -77,6 +140,25 @@ def add_library(
     def refuse(_: Request, err: LibraryError) -> JSONResponse:
         code, reason = _ANSWERS[type(err)]
         return JSONResponse({"code": reason}, status_code=code)
+
+    @app.exception_handler(UploadRejectedError)
+    def reject(_: Request, err: UploadRejectedError) -> JSONResponse:
+        too_large = err.reason == RejectReason.TOO_LARGE
+        code = (
+            status.HTTP_413_CONTENT_TOO_LARGE
+            if too_large
+            else status.HTTP_422_UNPROCESSABLE_CONTENT
+        )
+        return JSONResponse({"code": err.reason}, status_code=code)
+
+    @app.exception_handler(DuplicateUploadError)
+    def duplicate(_: Request, err: DuplicateUploadError) -> JSONResponse:
+        body = DuplicateOut(
+            code="duplicate_upload", book_id=err.book.id, title=err.book.title
+        )
+        return JSONResponse(
+            body.model_dump(mode="json"), status_code=status.HTTP_409_CONFLICT
+        )
 
     app.include_router(router)
 
