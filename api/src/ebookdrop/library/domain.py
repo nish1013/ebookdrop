@@ -38,6 +38,7 @@ class BookEvent(StrEnum):
     BOOK_READY = "book_ready"
     SANDBOX_ESCAPE_BLOCKED = "sandbox_escape_blocked"
     CONVERSION_FAILED = "conversion_failed"
+    BOOK_OPEN_FAILED = "book_open_failed"
 
 
 class IntakeEvent(StrEnum):

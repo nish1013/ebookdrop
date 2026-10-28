@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { SignInPage } from "./identity/SignInPage";
 import { SignUpPage } from "./identity/SignUpPage";
 import { LibraryPage } from "./library/LibraryPage";
+import { ReaderPage } from "./reader/ReaderPage";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -12,6 +13,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/sign-up" element={<SignUpPage />} />
         <Route path="/sign-in" element={<SignInPage />} />
         <Route path="/library" element={<LibraryPage />} />
+        <Route path="/books/:bookId" element={<ReaderPage />} />
         <Route path="*" element={<Navigate to="/library" replace />} />
       </Routes>
     </BrowserRouter>

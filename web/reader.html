@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' blob:; img-src blob: data:; font-src blob: data:; media-src blob:; connect-src 'self'; frame-src blob:; worker-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Book</title>
+  </head>
+  <body>
+    <main id="book"></main>
+    <nav>
+      <button type="button" id="previous">Previous page</button>
+      <button type="button" id="next">Next page</button>
+    </nav>
+    <script type="module" src="/src/reader/reader.ts"></script>
+  </body>
+</html>
