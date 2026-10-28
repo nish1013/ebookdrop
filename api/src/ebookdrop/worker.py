@@ -110,9 +110,8 @@ class Worker:
                 stop.wait(POLL_SECONDS)
 
 
-def main() -> None:
-    """Run the worker on `DATABASE_URL` and `STORAGE_DIR`."""
-    logging.basicConfig(level=logging.INFO)
+def worker_from_env() -> Worker:
+    """Build the worker on `DATABASE_URL` and `STORAGE_DIR`."""
     engine = create_engine(os.environ["DATABASE_URL"])
     clock = SystemClock()
     storage = storage_from_env()
@@ -120,7 +119,13 @@ def main() -> None:
     removals = file_removal(engine, clock, storage)
     libraries = library_removal(engine, clock)
     failures = identity_service(engine, clock)
-    Worker(jobs, removals, libraries, failures, clock).run_until(threading.Event())
+    return Worker(jobs, removals, libraries, failures, clock)
+
+
+def main() -> None:
+    """Run the worker on `DATABASE_URL` and `STORAGE_DIR`."""
+    logging.basicConfig(level=logging.INFO)
+    worker_from_env().run_until(threading.Event())
 
 
 def _guarded(step: Callable[[], int]) -> None:
