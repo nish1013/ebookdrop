@@ -2,6 +2,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "../api/client";
+import { Alert } from "../ui/alert";
+import { Button } from "../ui/button";
+import { Card, CardContent } from "../ui/card";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
 import type { Refusal } from "./library.constants";
 import { bookAnchor, refusalFor } from "./library.constants";
 import type { Upload } from "./library.schema";
@@ -38,26 +43,34 @@ export function UploadForm({ onUploaded }: UploadFormProps) {
   });
 
   return (
-    <form onSubmit={submit} noValidate>
-      <label>
-        Book file
-        <input type="file" accept=".epub,.pdf,application/epub+zip,application/pdf" {...register("files")} />
-      </label>
-      {formState.errors.files && <p>{formState.errors.files.message}</p>}
-      {refusal && (
-        <p role="alert">
-          {refusal.message}
-          {refusal.book && (
-            <>
-              {": "}
-              <a href={`#${bookAnchor(refusal.book.id)}`}>{refusal.book.title}</a>
-            </>
+    <Card className="mb-8 border-dashed">
+      <CardContent className="pt-6">
+        <form onSubmit={submit} noValidate className="grid gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <Label className="flex-1">
+              Book file
+              <Input type="file" accept=".epub,.pdf,application/epub+zip,application/pdf" {...register("files")} />
+            </Label>
+            <Button type="submit" disabled={formState.isSubmitting}>
+              Upload
+            </Button>
+          </div>
+          {formState.errors.files && <p className="text-sm text-destructive">{formState.errors.files.message}</p>}
+          {refusal && (
+            <Alert variant="destructive">
+              {refusal.message}
+              {refusal.book && (
+                <>
+                  {": "}
+                  <a href={`#${bookAnchor(refusal.book.id)}`} className="font-medium underline underline-offset-4">
+                    {refusal.book.title}
+                  </a>
+                </>
+              )}
+            </Alert>
           )}
-        </p>
-      )}
-      <button type="submit" disabled={formState.isSubmitting}>
-        Upload
-      </button>
-    </form>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

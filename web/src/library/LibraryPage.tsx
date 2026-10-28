@@ -4,6 +4,8 @@ import { api } from "../api/client";
 import { BookList } from "./BookList";
 import type { BookOut } from "./library.constants";
 import { REFRESH_MS } from "./library.constants";
+import { Button, buttonVariants } from "../ui/button";
+import { PageShell } from "../ui/PageShell";
 import { UploadForm } from "./UploadForm";
 
 export function LibraryPage() {
@@ -47,17 +49,29 @@ export function LibraryPage() {
   if (email === null || books === null) return null;
 
   return (
-    <main>
-      <header>
-        <span>{email}</span>
-        <Link to="/account">Account</Link>
-        <button type="button" onClick={signOut}>
-          Sign out
-        </button>
-      </header>
-      <h1>Library</h1>
+    <PageShell
+      actions={
+        <>
+          <span className="hidden text-muted-foreground sm:inline">{email}</span>
+          <Link to="/account" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+            Account
+          </Link>
+          <Button variant="outline" size="sm" onClick={signOut}>
+            Sign out
+          </Button>
+        </>
+      }
+    >
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Library</h1>
+          <p className="text-sm text-muted-foreground">
+            {books.length === 1 ? "1 book" : `${books.length} books`}. EPUB and PDF, up to 50 MB each.
+          </p>
+        </div>
+      </div>
       <UploadForm onUploaded={loadBooks} />
       <BookList books={books} onDelete={deleteBook} />
-    </main>
+    </PageShell>
   );
 }

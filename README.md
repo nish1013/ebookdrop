@@ -2,6 +2,18 @@
 
 A reader uploads an EPUB or PDF file. A Docker sandbox converts it, and the book appears in the reader's web library.
 
+![The library with four converted books and one failed upload](docs/screenshots/library.png)
+
+| Read a book in the browser | Upload the same file twice |
+|---|---|
+| ![The reader on chapter 1 of Pride and Prejudice](docs/screenshots/reader.png) | ![The upload form links to the book that is already there](docs/screenshots/upload-duplicate.png) |
+
+| Sign up |
+|---|
+| ![The sign-up form](docs/screenshots/sign-up.png) |
+
+The books in the screenshots are public-domain texts with generated covers.
+
 ```
 browser ──> web (React, Vite) ──/api──> API (FastAPI) ──> PostgreSQL
                                           │                  ▲
