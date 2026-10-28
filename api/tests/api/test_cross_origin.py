@@ -39,3 +39,11 @@ def test_read_from_another_origin_is_not_refused(
     client: TestClient, signed_in_ana: str
 ) -> None:
     assert client.get("/api/sessions/current", headers=SIBLING).status_code == 200
+
+
+def test_change_from_a_sandboxed_frame_is_refused(
+    client: TestClient, signed_in_ana: str
+) -> None:
+    response = client.delete("/api/accounts/me", headers={"Origin": "null"})
+
+    assert response.status_code == 403

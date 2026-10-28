@@ -19,6 +19,7 @@ with (
 ):
     os.environ["DATABASE_URL"] = postgres.get_connection_url()
     os.environ["STORAGE_DIR"] = storage_dir
+    os.environ.setdefault("APP_ORIGIN", "http://localhost:5173")
     config = Config(os.path.join(HERE, "alembic.ini"))
     config.set_main_option("script_location", os.path.join(HERE, "migrations"))
     command.upgrade(config, "head")

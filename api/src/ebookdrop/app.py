@@ -1,9 +1,10 @@
 """The web application and its wiring."""
 
 import os
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import Engine, create_engine
@@ -23,13 +24,27 @@ from ebookdrop.library.service import LibraryService
 from ebookdrop.library.store import LibraryStore
 from ebookdrop.storage import LocalDiskStorage, StoragePort
 
+_Handler = Callable[[Request], Awaitable[Response]]
+_Middleware = Callable[[Request, _Handler], Awaitable[Response]]
+
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
 
 def create_app(
-    engine: Engine, clock: Clock, storage: StoragePort, inspector: InspectorPort
+    engine: Engine,
+    clock: Clock,
+    storage: StoragePort,
+    inspector: InspectorPort,
+    *,
+    origin: str,
 ) -> FastAPI:
-    """Build the API on one database, one clock, one storage and one inspector."""
+    """Build the API on one database, one clock, one storage and one inspector.
+
+    A POST, PUT or DELETE from a page outside `origin` is refused.
+    """
     app = FastAPI(title="ebookdrop")
     app.add_exception_handler(RequestValidationError, _refuse_body)
+    app.middleware("http")(_cross_origin_refusal(origin.rstrip("/")))
     identity = identity_service(engine, clock)
     add_identity(app, identity)
     library = LibraryService(LibraryStore(engine), storage, clock, inspector)
@@ -65,9 +80,19 @@ def storage_from_env() -> StoragePort:
 
 
 def app_from_env() -> FastAPI:
-    """Build the API from `DATABASE_URL` and `STORAGE_DIR`, for uvicorn `--factory`."""
+    """Build the API from `DATABASE_URL`, `STORAGE_DIR` and `APP_ORIGIN`.
+
+    For uvicorn `--factory`. `APP_ORIGIN` is the scheme, host and port of the web
+    page, as the browser shows it.
+    """
     engine = create_engine(os.environ["DATABASE_URL"])
-    return create_app(engine, SystemClock(), storage_from_env(), DockerInspector())
+    return create_app(
+        engine,
+        SystemClock(),
+        storage_from_env(),
+        DockerInspector(),
+        origin=os.environ["APP_ORIGIN"],
+    )
 
 
 async def _refuse_body(_: Request, __: Exception) -> JSONResponse:
@@ -75,3 +100,18 @@ async def _refuse_body(_: Request, __: Exception) -> JSONResponse:
         {"code": "invalid_request"},
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
     )
+
+
+def _cross_origin_refusal(origin: str) -> _Middleware:
+    # SameSite=Lax still sends the cookie from a sibling subdomain. Browsers send
+    # Origin on each cross-origin POST, PUT and DELETE, so no Origin passes. A
+    # proxy can rewrite Host, so the page origin is set, not taken from Host.
+    async def refuse(request: Request, call_next: _Handler) -> Response:
+        sent = request.headers.get("origin")
+        if request.method in _SAFE_METHODS or sent is None or sent == origin:
+            return await call_next(request)
+        return JSONResponse(
+            {"code": "cross_origin"}, status_code=status.HTTP_403_FORBIDDEN
+        )
+
+    return refuse

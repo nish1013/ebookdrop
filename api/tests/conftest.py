@@ -75,7 +75,7 @@ def client(
     storage: LocalDiskStorage,
     inspector: InProcessInspector,
 ) -> Iterator[TestClient]:
-    app = create_app(engine, clock, storage, inspector)
+    app = create_app(engine, clock, storage, inspector, origin="https://testserver")
     with TestClient(app, base_url="https://testserver") as client:
         yield client
 
