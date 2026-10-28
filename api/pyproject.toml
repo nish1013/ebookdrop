@@ -40,7 +40,7 @@ ignore = ["S101"]
 
 [tool.mypy]
 strict = true
-packages = ["ebookdrop"]
+files = ["src/ebookdrop", "scripts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
