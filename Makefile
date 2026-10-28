@@ -22,4 +22,4 @@ api-types:
 	cd web && npm run -s api-types
 
 sandbox-image:
-	docker build -q -t ebookdrop-inspect -f api/sandbox/Dockerfile api
+	docker build -q -t ebookdrop-sandbox -f api/sandbox/Dockerfile api

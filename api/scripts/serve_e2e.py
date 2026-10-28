@@ -3,7 +3,6 @@
 import os
 import tempfile
 import threading
-import time
 from pathlib import Path
 
 import uvicorn
@@ -14,22 +13,11 @@ from testcontainers.community.postgres import PostgresContainer
 
 from ebookdrop.app import conversion_jobs
 from ebookdrop.clock import SystemClock
-from ebookdrop.conversion.port import Conversion
-from ebookdrop.conversion.stub import StubConverter
+from ebookdrop.conversion.docker import DockerConverter
 from ebookdrop.storage import LocalDiskStorage
 from ebookdrop.worker import run_until
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONVERT_SECONDS = 2.0
-
-
-class SlowStubConverter(StubConverter):
-    """Holds each book in Processing long enough for a page to show it."""
-
-    def convert(self, source: Path, work_dir: Path) -> Conversion:
-        time.sleep(CONVERT_SECONDS)
-        return super().convert(source, work_dir)
-
 
 with (
     PostgresContainer("postgres:16-alpine", driver="psycopg") as postgres,
@@ -44,7 +32,7 @@ with (
         create_engine(os.environ["DATABASE_URL"]),
         SystemClock(),
         LocalDiskStorage(Path(storage_dir)),
-        SlowStubConverter(),
+        DockerConverter(),
     )
     stop = threading.Event()
     threading.Thread(target=run_until, args=(stop, jobs), daemon=True).start()

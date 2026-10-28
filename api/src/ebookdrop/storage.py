@@ -21,6 +21,10 @@ class StoragePort(Protocol):
         """Remove the file at `key`. A missing file is no error."""
         ...
 
+    def move(self, source: str, target: str) -> None:
+        """Move the file at `source` to `target`, replacing any file there."""
+        ...
+
 
 class InvalidKeyError(ValueError):
     """The key leaves the storage root or is not relative."""
@@ -46,6 +50,11 @@ class LocalDiskStorage:
         path.unlink(missing_ok=True)
         with contextlib.suppress(OSError):
             path.parent.rmdir()
+
+    def move(self, source: str, target: str) -> None:
+        path = self._path(target)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._path(source).replace(path)
 
     def _path(self, key: str) -> Path:
         parts = PurePosixPath(key).parts

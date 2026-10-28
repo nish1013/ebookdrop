@@ -12,15 +12,36 @@ interface Entry {
 }
 
 const CHAPTER = "<html xmlns='http://www.w3.org/1999/xhtml'><body><p>Dune</p></body></html>";
+const BLANK_CHAPTER = "<html xmlns='http://www.w3.org/1999/xhtml'><body> </body></html>";
 const CONTAINER =
   '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">' +
   '<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>';
 
-export function epub(name: string, seed = name): BookFile {
+export interface EpubDetails {
+  title?: string;
+  author?: string;
+  blank?: boolean;
+}
+
+function opf({ title, author }: EpubDetails): string {
+  const details =
+    (title ? `<dc:title>${title}</dc:title>` : "") + (author ? `<dc:creator>${author}</dc:creator>` : "");
+  return (
+    '<?xml version="1.0" encoding="utf-8"?>' +
+    '<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id">' +
+    '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">' +
+    `<dc:identifier id="id">urn:uuid:5f1c6d43-9a0e-4c55-8a40-3f0d7c0f0a11</dc:identifier><dc:language>en</dc:language>${details}` +
+    '</metadata><manifest><item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest>' +
+    '<spine><itemref idref="ch1"/></spine></package>'
+  );
+}
+
+export function epub(name: string, seed = name, details: EpubDetails = {}): BookFile {
   const buffer = storedZip([
     { name: "mimetype", data: Buffer.from("application/epub+zip") },
     { name: "META-INF/container.xml", data: Buffer.from(CONTAINER) },
-    { name: "OEBPS/ch1.xhtml", data: Buffer.from(CHAPTER) },
+    { name: "OEBPS/content.opf", data: Buffer.from(opf(details)) },
+    { name: "OEBPS/ch1.xhtml", data: Buffer.from(details.blank ? BLANK_CHAPTER : CHAPTER) },
     { name: "OEBPS/seed.txt", data: Buffer.from(seed) },
   ]);
   return { name, mimeType: "application/epub+zip", buffer };

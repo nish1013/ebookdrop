@@ -7,18 +7,17 @@ from pathlib import Path
 import pytest
 
 from ebookdrop.conversion.port import BookFormat
-from ebookdrop.inspection.docker import DockerInspector, sandbox_command
+from ebookdrop.inspection.docker import DockerInspector
 from ebookdrop.inspection.port import (
     FileRefusedError,
     InspectorPort,
     InspectorUnavailableError,
     Refusal,
 )
+from ebookdrop.sandbox import sandbox_command
 from tests.fakes import InProcessInspector
 from tests.samples import DRM_ALGORITHM, EPUB_MIMETYPE, cut, epub, pdf
 
-API = Path(__file__).resolve().parents[2]
-TEST_IMAGE = "ebookdrop-inspect:test"
 ACCEPTED = [
     ("dune.epub", epub(), BookFormat.EPUB),
     ("tax-guide.pdf", pdf(owner="owner", allow_print=False), BookFormat.PDF),
@@ -29,17 +28,6 @@ REFUSED = [
     ("bank.pdf", pdf(user="secret", owner="owner"), Refusal.PASSWORD_PROTECTED),
     ("cut.epub", cut(epub(padding=64 * 1024), 0.6), Refusal.DAMAGED),
 ]
-
-
-@pytest.fixture(scope="session")
-def image() -> str:
-    subprocess.run(
-        ["docker", "build", "-q", "-t", TEST_IMAGE, "-f", "sandbox/Dockerfile", "."],
-        cwd=API,
-        check=True,
-        capture_output=True,
-    )
-    return TEST_IMAGE
 
 
 @pytest.fixture(params=["in_process", "docker"])
@@ -153,7 +141,7 @@ def test_inspect_past_its_time_limit_refuses_and_removes_the_container(
 def test_docker_inspector_with_no_image_is_unavailable_not_a_reject(
     tmp_path: Path,
 ) -> None:
-    inspector = DockerInspector("ebookdrop-inspect:absent")
+    inspector = DockerInspector("ebookdrop-sandbox:absent")
 
     with pytest.raises(InspectorUnavailableError):
         inspector.inspect(written(tmp_path, "dune.epub", epub()))

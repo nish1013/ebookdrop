@@ -26,6 +26,16 @@
             ],
             "title": "Cover Url"
           },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Failure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -44,7 +54,8 @@
           "title",
           "author",
           "status",
-          "cover_url"
+          "cover_url",
+          "failure"
         ],
         "title": "BookOut",
         "type": "object"
@@ -97,6 +108,17 @@
         ],
         "title": "ErrorOut",
         "type": "object"
+      },
+      "Failure": {
+        "description": "Why a conversion fails (`ConversionFailed`).",
+        "enum": [
+          "malformed",
+          "unreadable",
+          "timed_out",
+          "crashed"
+        ],
+        "title": "Failure",
+        "type": "string"
       },
       "ReaderOut": {
         "description": "A reader as the pages see it.",

@@ -1,0 +1,27 @@
+#!/usr/local/bin/python
+"""Acts as a converter that a hostile book took over.
+
+The book title picks the act: "hang" never ends, "flood" writes past the output
+cap to the container stdout and then hangs, and any other title calls out to the
+network.
+"""
+
+import os
+import socket
+import sys
+import time
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1]) as book:
+    package = book.read("OEBPS/content.opf")
+hang = b"<dc:title>hang</dc:title>" in package
+flood = b"<dc:title>flood</dc:title>" in package
+
+if flood:
+    with open(f"/proc/{os.getppid()}/fd/1", "wb") as stdout:
+        block = b"\0" * (1024 * 1024)
+        for _ in range(200):
+            stdout.write(block)
+if hang or flood:
+    time.sleep(600)
+socket.create_connection(("1.1.1.1", 443), timeout=2)

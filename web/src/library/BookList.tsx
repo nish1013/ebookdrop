@@ -1,5 +1,5 @@
 import type { BookOut } from "./library.constants";
-import { bookAnchor, STATUS_LABELS } from "./library.constants";
+import { bookAnchor, FAILURE_MESSAGES, STATUS_LABELS } from "./library.constants";
 
 export interface BookListProps {
   books: BookOut[];
@@ -22,6 +22,7 @@ export function BookList({ books }: BookListProps) {
           <span>{book.title}</span>
           {book.author && <span>{book.author}</span>}
           <span>{STATUS_LABELS[book.status]}</span>
+          {book.failure && <span>{FAILURE_MESSAGES[book.failure]}</span>}
         </li>
       ))}
     </ul>
