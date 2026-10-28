@@ -2,8 +2,18 @@
 
 import contextlib
 import shutil
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO, Protocol
+
+
+@dataclass(frozen=True)
+class StoredFile:
+    """One stored file and the time of its last write."""
+
+    key: str
+    modified_at: datetime
 
 
 class StoragePort(Protocol):
@@ -23,6 +33,10 @@ class StoragePort(Protocol):
 
     def move(self, source: str, target: str) -> None:
         """Move the file at `source` to `target`, replacing any file there."""
+        ...
+
+    def files(self, area: str) -> list[StoredFile]:
+        """List every file under the area `area`, such as `staging`."""
         ...
 
 
@@ -55,6 +69,22 @@ class LocalDiskStorage:
         path = self._path(target)
         path.parent.mkdir(parents=True, exist_ok=True)
         self._path(source).replace(path)
+
+    def files(self, area: str) -> list[StoredFile]:
+        root = self._path(area)
+        if not root.is_dir():
+            return []
+        found: list[StoredFile] = []
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            try:
+                modified = path.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            key = path.relative_to(self._root).as_posix()
+            found.append(StoredFile(key, datetime.fromtimestamp(modified, UTC)))
+        return found
 
     def _path(self, key: str) -> Path:
         parts = PurePosixPath(key).parts

@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { Link } from "react-router";
 import type { BookOut } from "./library.constants";
 import { bookAnchor, FAILURE_MESSAGES, STATUS_LABELS } from "./library.constants";
 
 export interface BookListProps {
   books: BookOut[];
+  onDelete: (book: BookOut) => Promise<void>;
 }
 
-export function BookList({ books }: BookListProps) {
+export function BookList({ books, onDelete }: BookListProps) {
+  const [confirming, setConfirming] = useState<string | null>(null);
+
   if (books.length === 0) return <p>Your library is empty</p>;
 
   return (
@@ -28,6 +32,21 @@ export function BookList({ books }: BookListProps) {
             <Link to={`/books/${book.id}`} aria-label={`Read ${book.title}`}>
               Read
             </Link>
+          )}
+          {confirming === book.id ? (
+            <div role="group" aria-label={`Delete ${book.title}?`}>
+              <span>Delete {book.title}? This cannot be undone.</span>
+              <button type="button" onClick={() => onDelete(book).then(() => setConfirming(null))}>
+                Delete for good
+              </button>
+              <button type="button" onClick={() => setConfirming(null)}>
+                Keep
+              </button>
+            </div>
+          ) : (
+            <button type="button" aria-label={`Delete ${book.title}`} onClick={() => setConfirming(book.id)}>
+              Delete
+            </button>
           )}
         </li>
       ))}

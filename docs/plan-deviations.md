@@ -101,3 +101,12 @@ only once it is added to [decisions.md](decisions.md).
 - **Built:** The owner's book that is not Ready answers 404 `book_not_found`, and the app logs no `BookAccessDenied` for it.
 - **Why:** Only a Ready book has a readable file. The library list shows a Read link for Ready books only, so the page never asks for the others.
 - **Undo:** Answer 409 `book_not_ready` for the owner's book that is not Ready.
+
+## D15. The event rows of a deleted book stay (PR 7, 2026-10-27)
+
+**In short:** The timed events of a deleted book stay for the metric report.
+
+- **Plan:** Decision 9 says each delete removes the original, the converted file, the cover and the rows.
+- **Built:** `DeleteBook` removes the `books` row and its job row. The `book_events` rows stay, and they hold the book id, an event name and a time only.
+- **Why:** The metric report counts each received upload (decision 12), so a delete must not change the numbers of a past day. The file name, title, author and bytes go with the book row and the files.
+- **Undo:** Delete the `book_events` rows in the `DeleteBook` transaction. The report then drops deleted books from past days.

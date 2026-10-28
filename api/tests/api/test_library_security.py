@@ -125,3 +125,10 @@ def test_signed_out_book_read_gets_401(
 
     assert response.status_code == 401
     assert response.json() == {"code": "signed_out"}
+
+
+def test_signed_out_book_delete_gets_401(client: TestClient) -> None:
+    response = client.delete(f"/api/books/{uuid.uuid4()}")
+
+    assert response.status_code == 401
+    assert response.json() == {"code": "signed_out"}

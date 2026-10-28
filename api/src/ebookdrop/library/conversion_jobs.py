@@ -13,7 +13,7 @@ from ebookdrop.conversion.port import (
     ConverterPort,
     SandboxEscapeError,
 )
-from ebookdrop.library.domain import STUCK_AFTER, BookDetails, BookEvent
+from ebookdrop.library.domain import STUCK_AFTER, BookDetails, BookEvent, FileName
 from ebookdrop.library.service import (
     book_key,
     cover_key,
@@ -57,7 +57,8 @@ class ConversionJobs:
         A failed conversion fails the book. A crash after the start, or a sandbox
         that does not run, leaves the book Processing for the stuck check.
         """
-        if not self._store.start_job(book_id, self._clock.now()):
+        name = self._store.start_job(book_id, self._clock.now())
+        if name is None:
             return
         with tempfile.TemporaryDirectory() as work:
             work_dir = Path(work)
@@ -77,9 +78,11 @@ class ConversionJobs:
                 [_CONVERTED[conversion.format], BookEvent.BOOK_DETAILS_EXTRACTED],
                 self._clock.now(),
             )
-            self.mark_ready(book_id, conversion)
+            self.mark_ready(book_id, conversion, name)
 
-    def mark_ready(self, book_id: uuid.UUID, conversion: Conversion) -> bool:
+    def mark_ready(
+        self, book_id: uuid.UUID, conversion: Conversion, name: FileName
+    ) -> bool:
         """P3: record `BookReady` once (R13), and move the files to the book key.
 
         The converted files wait in `staging/<upload id>/` until the update.
@@ -102,9 +105,7 @@ class ConversionJobs:
             for key, path in files.items():
                 with path.open("rb") as converted:
                     self._storage.save(staging_key(book_id, key), converted)
-            details = BookDetails.extracted(
-                conversion.title, conversion.author, self._store.file_name(book_id)
-            )
+            details = BookDetails.extracted(conversion.title, conversion.author, name)
             ready = self._store.mark_ready(
                 book_id,
                 conversion.format,

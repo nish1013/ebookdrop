@@ -16,6 +16,21 @@ MAX_DETAIL_LENGTH = 255
 UNKNOWN_AUTHOR = "Unknown author"
 UNTITLED = "Untitled"
 STUCK_AFTER = timedelta(minutes=5)
+FAILED_KEEP = timedelta(days=7)
+STAGING_KEEP = timedelta(days=1)
+REMOVAL_RETRY_FIRST = timedelta(seconds=10)
+REMOVAL_RETRY_MOST = timedelta(hours=1)
+_MOST_DOUBLINGS = 16
+
+
+def removal_retry_after(attempts: int) -> timedelta:
+    """The wait before P4 tries a removal again after `attempts` failures.
+
+    The wait doubles with each failure, up to `REMOVAL_RETRY_MOST`.
+    """
+    doublings = min(max(attempts - 1, 0), _MOST_DOUBLINGS)
+    wait: timedelta = REMOVAL_RETRY_FIRST * 2**doublings
+    return min(wait, REMOVAL_RETRY_MOST)
 
 
 class BookStatus(StrEnum):
@@ -39,6 +54,10 @@ class BookEvent(StrEnum):
     SANDBOX_ESCAPE_BLOCKED = "sandbox_escape_blocked"
     CONVERSION_FAILED = "conversion_failed"
     BOOK_OPEN_FAILED = "book_open_failed"
+    BOOK_DELETED = "book_deleted"
+    BOOK_DELETED_DURING_CONVERSION = "book_deleted_during_conversion"
+    BOOK_FILES_REMOVED = "book_files_removed"
+    FAILED_UPLOAD_CLEANED_UP = "failed_upload_cleaned_up"
 
 
 class IntakeEvent(StrEnum):

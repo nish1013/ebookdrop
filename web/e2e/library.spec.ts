@@ -67,3 +67,23 @@ test("S4 AC6 Ana uploads the same bytes again and gets a link to dune.epub", asy
   await refusal.getByRole("link", { name: DUNE_ITEM }).click();
   await expect(page.locator("li:target")).toContainText(DUNE_ITEM);
 });
+
+test("S9 AC1 Ana deletes dune.epub after an in-page confirm and it is gone from her list", async ({ page, request }) => {
+  const email = newEmail();
+  await signUpByApi(request, email);
+  await signIn(page, email);
+  await uploadDune(page);
+  const book = page.getByRole("listitem").filter({ hasText: DUNE_ITEM });
+  await expect(book.getByText("Ready")).toBeVisible({ timeout: 15_000 });
+
+  await book.getByRole("button", { name: "Delete Dune" }).click();
+  const confirm = book.getByRole("group", { name: "Delete Dune?" });
+  await confirm.getByRole("button", { name: "Keep" }).click();
+  await expect(book.getByText("Ready")).toBeVisible();
+  await book.getByRole("button", { name: "Delete Dune" }).click();
+  await confirm.getByRole("button", { name: "Delete for good" }).click();
+
+  await expect(page.getByText("Your library is empty")).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("Your library is empty")).toBeVisible();
+});
