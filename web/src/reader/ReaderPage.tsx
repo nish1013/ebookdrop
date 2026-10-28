@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api } from "../api/client";
+import { Alert } from "../ui/alert";
+import { buttonVariants } from "../ui/button";
+import { PageShell } from "../ui/PageShell";
 import { READER_MESSAGES, readerState, readerUrl } from "./reader.constants";
 import type { ReaderState } from "./reader.types";
 
@@ -26,18 +29,21 @@ export function ReaderPage() {
   const message = READER_MESSAGES[state];
 
   return (
-    <main>
-      <nav>
-        <Link to="/library">Library</Link>
-      </nav>
-      {message && <p role="alert">{message}</p>}
+    <PageShell
+      actions={
+        <Link to="/library" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+          Library
+        </Link>
+      }
+    >
+      {message && <Alert>{message}</Alert>}
       <iframe
         ref={frame}
         title="Book"
         src={readerUrl(bookId)}
         hidden={message !== undefined}
-        style={{ width: "100%", height: "85vh", border: 0 }}
+        className="h-[78vh] w-full rounded-xl border bg-card shadow-sm"
       />
-    </main>
+    </PageShell>
   );
 }

@@ -6,6 +6,7 @@ import { SignInPage } from "./identity/SignInPage";
 import { SignUpPage } from "./identity/SignUpPage";
 import { LibraryPage } from "./library/LibraryPage";
 import { ReaderPage } from "./reader/ReaderPage";
+import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

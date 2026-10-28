@@ -16,11 +16,20 @@ export function SignInPage() {
   }
 
   return (
-    <>
-      <CredentialsForm title="Sign in" submitLabel="Sign in" schema={credentialsSchema} onSubmit={signIn} />
-      <p>
-        New here? <Link to="/sign-up">Sign up</Link>
-      </p>
-    </>
+    <CredentialsForm
+      title="Sign in"
+      description="Welcome back. Your library is waiting."
+      submitLabel="Sign in"
+      schema={credentialsSchema}
+      onSubmit={signIn}
+      footer={
+        <span>
+          New here?{" "}
+          <Link to="/sign-up" className="font-medium text-primary underline-offset-4 hover:underline">
+            Sign up
+          </Link>
+        </span>
+      }
+    />
   );
 }

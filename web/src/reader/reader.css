@@ -23,5 +23,24 @@ foliate-view {
 nav {
   display: flex;
   justify-content: space-between;
-  padding: 0.5rem;
+  padding: 0.75rem;
+  border-top: 1px solid #e5e7eb;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+nav button {
+  height: 2.25rem;
+  padding: 0 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+nav button:hover {
+  background: #f3f4f6;
 }

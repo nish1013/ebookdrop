@@ -18,11 +18,20 @@ export function SignUpPage() {
   }
 
   return (
-    <>
-      <CredentialsForm title="Sign up" submitLabel="Sign up" schema={signUpSchema} onSubmit={signUp} />
-      <p>
-        Have an account? <Link to="/sign-in">Sign in</Link>
-      </p>
-    </>
+    <CredentialsForm
+      title="Sign up"
+      description="Upload your EPUB and PDF books and read them anywhere."
+      submitLabel="Sign up"
+      schema={signUpSchema}
+      onSubmit={signUp}
+      footer={
+        <span>
+          Have an account?{" "}
+          <Link to="/sign-in" className="font-medium text-primary underline-offset-4 hover:underline">
+            Sign in
+          </Link>
+        </span>
+      }
+    />
   );
 }

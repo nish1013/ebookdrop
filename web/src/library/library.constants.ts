@@ -3,6 +3,7 @@ import type { components } from "../api/schema";
 export type BookOut = components["schemas"]["BookOut"];
 export type BookStatus = BookOut["status"];
 export type Failure = NonNullable<BookOut["failure"]>;
+export type StatusBadge = "secondary" | "success" | "destructive";
 
 export const REFRESH_MS = 1000;
 
@@ -10,6 +11,12 @@ export const STATUS_LABELS: Record<BookStatus, string> = {
   processing: "Processing",
   ready: "Ready",
   failed: "Failed",
+};
+
+export const STATUS_BADGES: Record<BookStatus, StatusBadge> = {
+  processing: "secondary",
+  ready: "success",
+  failed: "destructive",
 };
 
 export const FAILURE_MESSAGES: Record<Failure, string> = {
