@@ -3,19 +3,13 @@
 import os
 import tempfile
 import threading
-from pathlib import Path
 
 import uvicorn
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine
 from testcontainers.community.postgres import PostgresContainer
 
-from ebookdrop.app import conversion_jobs, file_removal, library_removal
-from ebookdrop.clock import SystemClock
-from ebookdrop.conversion.docker import DockerConverter
-from ebookdrop.storage import LocalDiskStorage
-from ebookdrop.worker import Worker
+from ebookdrop.worker import worker_from_env
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -28,14 +22,9 @@ with (
     config = Config(os.path.join(HERE, "alembic.ini"))
     config.set_main_option("script_location", os.path.join(HERE, "migrations"))
     command.upgrade(config, "head")
-    clock = SystemClock()
-    engine = create_engine(os.environ["DATABASE_URL"])
-    storage = LocalDiskStorage(Path(storage_dir))
-    jobs = conversion_jobs(engine, clock, storage, DockerConverter())
-    removals = file_removal(engine, clock, storage)
     stop = threading.Event()
-    libraries = library_removal(engine, clock)
-    worker = Worker(jobs, removals, libraries, clock)
-    threading.Thread(target=worker.run_until, args=(stop,), daemon=True).start()
+    threading.Thread(
+        target=worker_from_env().run_until, args=(stop,), daemon=True
+    ).start()
     uvicorn.run("ebookdrop.app:app_from_env", factory=True, host="127.0.0.1", port=8000)
     stop.set()
