@@ -148,6 +148,8 @@ class _CappedOutput:
     """Copies a pipe to `target`. Past `cap` bytes it calls `overflow` once.
 
     The bytes past the cap are read and dropped, so the writer never blocks.
+    `overflow` runs on its own thread, because `docker rm -f` waits for the
+    container output to drain.
     """
 
     def __init__(self, target: Path, cap: int, overflow: Callable[[], None]) -> None:
@@ -155,13 +157,15 @@ class _CappedOutput:
         self.passed = False
         self._target = target
         self._cap = cap
-        self._overflow = overflow
+        self._overflow = threading.Thread(target=overflow, daemon=True)
         self._copy = threading.Thread(target=self._run, daemon=True)
         self._copy.start()
 
     def close(self) -> None:
         os.close(self.write_end)
         self._copy.join()
+        if self.passed:
+            self._overflow.join()
 
     def _run(self) -> None:
         count = 0
@@ -173,7 +177,7 @@ class _CappedOutput:
                         target.write(chunk)
                     elif not self.passed:
                         self.passed = True
-                        self._overflow()
+                        self._overflow.start()
         finally:
             os.close(self._read_end)
 
