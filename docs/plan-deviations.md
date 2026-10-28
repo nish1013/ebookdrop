@@ -110,3 +110,21 @@ only once it is added to [decisions.md](decisions.md).
 - **Built:** `DeleteBook` removes the `books` row and its job row. The `book_events` rows stay, and they hold the book id, an event name and a time only.
 - **Why:** The metric report counts each received upload (decision 12), so a delete must not change the numbers of a past day. The file name, title, author and bytes go with the book row and the files.
 - **Undo:** Delete the `book_events` rows in the `DeleteBook` transaction. The report then drops deleted books from past days.
+
+## D16. The event rows of a deleted account stay (PR 8, 2026-10-27)
+
+**In short:** After an account delete, the timed events of its books and uploads stay for the metric report.
+
+- **Plan:** Decision 9 says each delete removes the rows. S12 says no data of the reader stays.
+- **Built:** `DeleteAccount` and P6 remove the account, sessions, failed sign-ins, books, jobs and library row. The `book_events` and `intake_events` rows stay.
+- **Why:** The same rule as D15: the report counts each received upload (decision 12). The event rows hold a random id, an event name, a reject reason and a time. No row holds the email, a file name, a title or a file.
+- **Undo:** Delete the `intake_events` rows of the reader and the `book_events` rows of each book in the P6 transaction. The report then drops them from past days.
+
+## D17. An upload locks the account row of its reader (PR 8, 2026-10-27)
+
+**In short:** An upload that ends after the account delete adds no book.
+
+- **Plan:** Library asks Identity for the signed-in reader at the start of each request (aggregates.md, checks).
+- **Built:** The upload transaction takes a key share lock on the `accounts` row. With no row, the upload answers 401 `signed_out`.
+- **Why:** An upload checks the session, then streams and inspects for seconds. An account delete and P6 in that gap leave a book that no P6 ever removes. The lock makes the delete wait for the upload commit, so P6 finds the book.
+- **Undo:** Remove the lock. Then a daily sweep must remove books whose reader has no account.

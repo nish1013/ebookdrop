@@ -26,9 +26,11 @@ from ebookdrop.identity.domain import (
     Email,
     EmailTakenError,
     SignedInReader,
+    WrongEmailOrPasswordError,
 )
 
 EMAIL_KEY_INDEX = "accounts_email_key"
+SESSION_ACCOUNT_KEY = "sessions_account_id_fkey"
 
 _metadata = MetaData()
 _accounts = Table(
@@ -50,6 +52,12 @@ _failures = Table(
     _metadata,
     Column("email_key", Text),
     Column("at", DateTime(timezone=True)),
+)
+_deletions = Table(
+    "account_deletions",
+    _metadata,
+    Column("reader_id", UUID(as_uuid=True), primary_key=True),
+    Column("queued_at", DateTime(timezone=True)),
 )
 _account_email_key = func.lower(func.trim(_accounts.c.email))
 
@@ -97,14 +105,22 @@ class IdentityStore:
     def start_session(
         self, token_hash: str, account_id: uuid.UUID, expires_at: datetime
     ) -> None:
-        """Store a session for the account."""
+        """Store a session for the account.
+
+        Raise `WrongEmailOrPasswordError` when an account delete commits first.
+        """
         row = {
             "token_hash": token_hash,
             "account_id": account_id,
             "expires_at": expires_at,
         }
-        with self._engine.begin() as connection:
-            connection.execute(insert(_sessions), row)
+        try:
+            with self._engine.begin() as connection:
+                connection.execute(insert(_sessions), row)
+        except IntegrityError as err:
+            if _constraint(err) == SESSION_ACCOUNT_KEY:
+                raise WrongEmailOrPasswordError from err
+            raise
 
     def find_session_reader(
         self, token_hash: str, now: datetime
@@ -126,6 +142,25 @@ class IdentityStore:
                 delete(_sessions).where(_sessions.c.token_hash == token_hash)
             )
 
+    def delete_account(self, account_id: uuid.UUID, at: datetime) -> None:
+        """Remove the account, its sessions and its failed sign-ins, and queue P6.
+
+        The sessions go by `ON DELETE CASCADE`. A missing account is not an error.
+        """
+        removed = (
+            delete(_accounts)
+            .where(_accounts.c.id == account_id)
+            .returning(_account_email_key)
+        )
+        with self._engine.begin() as connection:
+            key = connection.execute(removed).scalar()
+            if key is None:
+                return
+            connection.execute(delete(_failures).where(_failures.c.email_key == key))
+            connection.execute(
+                insert(_deletions), {"reader_id": account_id, "queued_at": at}
+            )
+
     def record_failure(self, email: Email, at: datetime) -> None:
         """Store one failed sign-in, and remove the key's failures past the window."""
         key = _email_key(email)
@@ -137,6 +172,13 @@ class IdentityStore:
                 )
             )
             connection.execute(insert(_failures).values(email_key=key, at=at))
+
+    def remove_failures_before(self, before: datetime) -> int:
+        """Remove the failed sign-ins of every key at or before `before`."""
+        with self._engine.begin() as connection:
+            return connection.execute(
+                delete(_failures).where(_failures.c.at <= before)
+            ).rowcount
 
     def count_failures(self, email: Email, since: datetime) -> int:
         """Count failed sign-ins for the email key after `since`."""

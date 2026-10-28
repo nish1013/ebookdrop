@@ -16,6 +16,7 @@ app = create_app(
     SystemClock(),
     LocalDiskStorage(Path()),
     DockerInspector(),
+    origin="http://localhost:5173",
 )
 json.dump(app.openapi(), sys.stdout, indent=2, sort_keys=True)
 sys.stdout.write("\n")

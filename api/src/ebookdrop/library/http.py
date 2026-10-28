@@ -24,6 +24,7 @@ from ebookdrop.library.domain import (
     InvalidFileNameError,
     InvalidUploadError,
     LibraryError,
+    ReaderGoneError,
     RejectReason,
     UploadAbandonedError,
     UploadRejectedError,
@@ -43,6 +44,7 @@ _ANSWERS: dict[type[LibraryError], tuple[int, str]] = {
         "inspect_unavailable",
     ),
     BookNotFoundError: (status.HTTP_404_NOT_FOUND, "book_not_found"),
+    ReaderGoneError: (status.HTTP_401_UNAUTHORIZED, "signed_out"),
 }
 _MEDIA_TYPES = {
     BookFormat.EPUB: "application/epub+zip",

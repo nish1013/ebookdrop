@@ -39,6 +39,7 @@ from ebookdrop.library.domain import (
     DuplicateUploadError,
     FileName,
     IntakeEvent,
+    ReaderGoneError,
     RejectReason,
     UploadRejectedError,
 )
@@ -101,6 +102,16 @@ _removals = Table(
     Column("next_try_at", DateTime(timezone=True)),
 )
 
+_accounts = Table(
+    "accounts", _metadata, Column("id", UUID(as_uuid=True), primary_key=True)
+)
+_account_deletions = Table(
+    "account_deletions",
+    _metadata,
+    Column("reader_id", UUID(as_uuid=True), primary_key=True),
+    Column("queued_at", DateTime(timezone=True)),
+)
+
 
 @dataclass(frozen=True)
 class NewUpload:
@@ -133,6 +144,7 @@ class LibraryStore:
         """Add the book under R6 and R10 in one transaction.
 
         The commit makes the book and its outbox job (P1) visible together.
+        Raise `ReaderGoneError` when the account is deleted.
         """
         row = {
             "id": upload.book_id,
@@ -147,6 +159,8 @@ class LibraryStore:
         }
         try:
             with self._engine.begin() as connection:
+                if not _hold_account(connection, upload.reader_id):
+                    raise ReaderGoneError
                 connection.execute(insert(_books), row)
                 if not _use_quota(connection, upload.reader_id, upload.size):
                     raise UploadRejectedError(RejectReason.OVER_QUOTA)
@@ -381,21 +395,41 @@ class LibraryStore:
                 .where(_libraries.c.reader_id == reader_id)
                 .values(bytes_used=_libraries.c.bytes_used - row.size)
             )
+            _queue_removal(connection, book_id, row.status, row.format, at)
+        return True
+
+    def deleted_accounts(self, limit: int) -> list[uuid.UUID]:
+        """Return the oldest deleted accounts whose library waits for P6."""
+        query = (
+            select(_account_deletions.c.reader_id)
+            .order_by(_account_deletions.c.queued_at)
+            .limit(limit)
+        )
+        with self._engine.connect() as connection:
+            return list(connection.execute(query).scalars())
+
+    def remove_library(self, reader_id: uuid.UUID, at: datetime) -> bool:
+        """P6: remove the reader's books, jobs and library row, and queue P4.
+
+        One transaction ends the wait, so a stop part way leaves the wait for
+        the next poll. `False` when done before.
+        """
+        done = delete(_account_deletions).where(
+            _account_deletions.c.reader_id == reader_id
+        )
+        removed = (
+            delete(_books)
+            .where(_books.c.reader_id == reader_id)
+            .returning(_books.c.id, _books.c.status, _books.c.format)
+        )
+        with self._engine.begin() as connection:
+            if connection.execute(done).rowcount != 1:
+                return False
+            for row in connection.execute(removed).all():
+                _queue_removal(connection, row.id, row.status, row.format, at)
             connection.execute(
-                insert(_removals),
-                {
-                    "book_id": book_id,
-                    "format": row.format,
-                    "queued_at": at,
-                    "next_try_at": at,
-                },
+                delete(_libraries).where(_libraries.c.reader_id == reader_id)
             )
-            name = (
-                BookEvent.BOOK_DELETED_DURING_CONVERSION
-                if row.status == BookStatus.PROCESSING
-                else BookEvent.BOOK_DELETED
-            )
-            _record(connection, book_id, [name], at)
         return True
 
     def waiting_removals(self, due_by: datetime, limit: int) -> list[WaitingRemoval]:
@@ -474,6 +508,17 @@ def _book(row: Row[Any]) -> Book:
     )
 
 
+def _hold_account(connection: Connection, reader_id: uuid.UUID) -> bool:
+    # The key share lock makes a concurrent account delete wait for this commit,
+    # so P6 finds the book. After the delete, no book can join the library.
+    held = (
+        select(_accounts.c.id)
+        .where(_accounts.c.id == reader_id)
+        .with_for_update(key_share=True)
+    )
+    return connection.execute(held).first() is not None
+
+
 def _use_quota(connection: Connection, reader_id: uuid.UUID, size: int) -> bool:
     connection.execute(
         pg_insert(_libraries)
@@ -494,6 +539,30 @@ def _use_quota(connection: Connection, reader_id: uuid.UUID, size: int) -> bool:
 def _constraint(err: IntegrityError) -> str | None:
     diag = getattr(err.orig, "diag", None)
     return getattr(diag, "constraint_name", None)
+
+
+def _queue_removal(
+    connection: Connection,
+    book_id: uuid.UUID,
+    status: str,
+    book_format: str | None,
+    at: datetime,
+) -> None:
+    connection.execute(
+        insert(_removals),
+        {
+            "book_id": book_id,
+            "format": book_format,
+            "queued_at": at,
+            "next_try_at": at,
+        },
+    )
+    name = (
+        BookEvent.BOOK_DELETED_DURING_CONVERSION
+        if status == BookStatus.PROCESSING
+        else BookEvent.BOOK_DELETED
+    )
+    _record(connection, book_id, [name], at)
 
 
 def _record(
