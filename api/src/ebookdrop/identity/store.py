@@ -21,7 +21,12 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.exc import IntegrityError
 
-from ebookdrop.identity.domain import SIGN_IN_FAILURE_WINDOW, Email, EmailTakenError
+from ebookdrop.identity.domain import (
+    SIGN_IN_FAILURE_WINDOW,
+    Email,
+    EmailTakenError,
+    SignedInReader,
+)
 
 EMAIL_KEY_INDEX = "accounts_email_key"
 
@@ -101,15 +106,18 @@ class IdentityStore:
         with self._engine.begin() as connection:
             connection.execute(insert(_sessions), row)
 
-    def find_session_email(self, token_hash: str, now: datetime) -> str | None:
-        """Return the email of a live session, or `None`."""
+    def find_session_reader(
+        self, token_hash: str, now: datetime
+    ) -> SignedInReader | None:
+        """Return the reader of a live session, or `None`."""
         query = (
-            select(_accounts.c.email)
+            select(_accounts.c.id, _accounts.c.email)
             .join(_sessions, _sessions.c.account_id == _accounts.c.id)
             .where(_sessions.c.token_hash == token_hash, _sessions.c.expires_at > now)
         )
         with self._engine.connect() as connection:
-            return connection.execute(query).scalar()
+            row = connection.execute(query).first()
+        return SignedInReader(row.id, row.email) if row else None
 
     def end_session(self, token_hash: str) -> None:
         """Remove the session. A missing session is not an error."""

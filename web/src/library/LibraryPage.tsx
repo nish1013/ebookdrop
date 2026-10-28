@@ -1,24 +1,45 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { api } from "../api/client";
+import { BookList } from "./BookList";
+import type { BookOut } from "./library.constants";
+import { REFRESH_MS } from "./library.constants";
+import { UploadForm } from "./UploadForm";
 
 export function LibraryPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState<string | null>(null);
+  const [books, setBooks] = useState<BookOut[] | null>(null);
+
+  const loadBooks = useCallback(async () => {
+    const { data } = await api.GET("/api/books");
+    if (data) setBooks(data);
+    else navigate("/sign-in", { replace: true });
+  }, [navigate]);
 
   useEffect(() => {
     api.GET("/api/sessions/current").then(({ data }) => {
-      if (data) setEmail(data.email);
-      else navigate("/sign-in", { replace: true });
+      if (data) {
+        setEmail(data.email);
+        loadBooks();
+      } else navigate("/sign-in", { replace: true });
     });
-  }, [navigate]);
+  }, [navigate, loadBooks]);
+
+  const processing = books?.some((book) => book.status === "processing") ?? false;
+
+  useEffect(() => {
+    if (!processing) return;
+    const timer = setTimeout(loadBooks, REFRESH_MS);
+    return () => clearTimeout(timer);
+  }, [processing, books, loadBooks]);
 
   async function signOut() {
     await api.DELETE("/api/sessions/current");
     navigate("/sign-in", { replace: true });
   }
 
-  if (email === null) return null;
+  if (email === null || books === null) return null;
 
   return (
     <main>
@@ -29,7 +50,8 @@ export function LibraryPage() {
         </button>
       </header>
       <h1>Library</h1>
-      <p>Your library is empty</p>
+      <UploadForm onUploaded={loadBooks} />
+      <BookList books={books} />
     </main>
   );
 }
