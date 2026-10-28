@@ -18,7 +18,9 @@ def sandbox_command(
 ) -> list[str]:
     """The `docker <verb>` line of one sandbox container, ending with the image.
 
-    `options` add to the limits. They never replace one.
+    `options` add to the limits. They never replace one. The daemon keeps no log,
+    because a hostile file can flood its output and `docker rm -f` waits for the
+    log copy.
     """
     return [
         docker(),
@@ -30,6 +32,8 @@ def sandbox_command(
         "--name",
         name,
         "--network",
+        "none",
+        "--log-driver",
         "none",
         "--read-only",
         "--memory",

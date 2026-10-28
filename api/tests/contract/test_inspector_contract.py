@@ -100,6 +100,22 @@ def test_sandbox_has_no_network_a_read_only_root_and_its_limits(image: str) -> N
     ]
 
 
+def test_sandbox_keeps_no_log_of_the_file_output(image: str) -> None:
+    name = "ebookdrop-inspect-log-probe"
+    subprocess.run(sandbox_command(name, image, verb="create"), check=True)
+    try:
+        log = subprocess.run(
+            ["docker", "inspect", "--format", "{{.HostConfig.LogConfig.Type}}", name],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
+
+    assert log.stdout.strip() == "none"
+
+
 def _deflated(name: str) -> zipfile.ZipInfo:
     info = zipfile.ZipInfo(name)
     info.compress_type = zipfile.ZIP_DEFLATED
